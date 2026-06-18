@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\AssessmentPeriod;
 use App\Models\AuditLog;
 use App\Services\AssessmentResultService;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class AssessmentPeriodController extends Controller
@@ -93,13 +95,20 @@ class AssessmentPeriodController extends Controller
 
     public function destroy(Request $request, AssessmentPeriod $period): RedirectResponse
     {
-        if ($period->assignments()->exists()) {
+        $hasRelatedData = $period->assignments()->exists()
+            || $period->weights()->exists()
+            || $period->peerApprovals()->exists()
+            || $period->results()->exists()
+            || $period->idpRecommendations()->exists()
+            || $period->reportExports()->exists();
+
+        if ($hasRelatedData) {
             $period->update(['status' => 'closed']);
-            $this->audit($request, 'close', "Closed assessment period {$period->name} because assignments exist.");
+            $this->audit($request, 'close', "Closed assessment period {$period->name} because related assessment data exists.");
 
             return redirect()
                 ->route('assessment-cycle.periods.index')
-                ->with('warning', 'Assessment period has assignments/responses, so it was closed instead of deleted.');
+                ->with('warning', 'Assessment period has related data, so it was closed instead of deleted.');
         }
 
         $name = $period->name;
@@ -143,7 +152,7 @@ class AssessmentPeriodController extends Controller
 
     private function validatedData(Request $request): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'semester' => ['required', 'string', 'max:100'],
             'year' => ['required', 'integer', 'min:2000', 'max:2100'],
@@ -152,6 +161,14 @@ class AssessmentPeriodController extends Controller
             'status' => ['required', Rule::in(['draft', 'active', 'closed'])],
             'threshold_score' => ['required', 'numeric', 'min:1', 'max:5'],
         ]);
+
+        if (Carbon::parse($data['start_date'])->diffInDays(Carbon::parse($data['end_date'])) > 13) {
+            throw ValidationException::withMessages([
+                'end_date' => 'Assessment periods may span a maximum of 14 calendar days, including the start and end dates.',
+            ]);
+        }
+
+        return $data;
     }
 
     private function audit(Request $request, string $action, string $description): void

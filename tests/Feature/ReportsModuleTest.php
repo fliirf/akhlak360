@@ -110,6 +110,37 @@ class ReportsModuleTest extends TestCase
         ]);
     }
 
+    public function test_talent_category_filter_applies_to_preview_and_csv(): void
+    {
+        $user = User::factory()->create(['role' => 'management']);
+        $fixture = $this->fixture();
+        $included = $this->employee($fixture['department'], $fixture['position'], 'EMP-TAL-001', 'High Potential Employee');
+        $excluded = $this->employee($fixture['department'], $fixture['position'], 'EMP-TAL-002', 'Core Contributor Employee');
+        $includedResult = $this->assessmentResult($fixture['period'], $included, 4.8, 'Sangat Baik');
+        $includedResult->update(['talent_mapping_category' => 'High Potential']);
+        $excludedResult = $this->assessmentResult($fixture['period'], $excluded, 3.2, 'Cukup');
+        $excludedResult->update(['talent_mapping_category' => 'Core Contributor']);
+
+        $query = http_build_query([
+            'period_id' => $fixture['period']->id,
+            'talent_category' => 'High Potential',
+        ]);
+
+        $this->actingAs($user)
+            ->get("/reports/export?{$query}")
+            ->assertOk()
+            ->assertSee('High Potential Employee')
+            ->assertDontSee('Core Contributor Employee');
+
+        $content = $this->actingAs($user)
+            ->get("/reports/export/csv?{$query}")
+            ->assertOk()
+            ->streamedContent();
+
+        $this->assertStringContainsString('High Potential Employee', $content);
+        $this->assertStringNotContainsString('Core Contributor Employee', $content);
+    }
+
     private function fixture(): array
     {
         $department = Department::create(['name' => 'Operations', 'code' => 'OPS']);

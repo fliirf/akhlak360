@@ -8,7 +8,7 @@
             <h1 class="m-0">Compliance Monitoring</h1>
             <p class="text-muted mb-0">Monitor assessment completion, pending users, and overdue assignments.</p>
         </div>
-        @if (auth()->user()->hasRole('admin_hr'))
+        @if (auth()->user()->hasRole('it_admin'))
             <form method="POST" action="{{ route('audit-compliance.compliance-monitoring.reminders') }}" class="mt-3 mt-md-0">
                 @csrf
                 <button type="submit" class="btn btn-warning">

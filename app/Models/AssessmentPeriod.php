@@ -65,6 +65,20 @@ class AssessmentPeriod extends Model
         return $query->where('status', 'active');
     }
 
+    public function scopeOpen(Builder $query): Builder
+    {
+        return $query->active()
+            ->whereDate('start_date', '<=', today())
+            ->whereDate('end_date', '>=', today());
+    }
+
+    public function isOpen(): bool
+    {
+        return $this->status === 'active'
+            && $this->start_date->startOfDay()->lte(today())
+            && $this->end_date->startOfDay()->gte(today());
+    }
+
     public function scopeDraft(Builder $query): Builder
     {
         return $query->where('status', 'draft');

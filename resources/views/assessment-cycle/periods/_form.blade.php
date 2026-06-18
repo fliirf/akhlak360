@@ -54,6 +54,7 @@
             @error('end_date')
                 <span class="invalid-feedback">{{ $message }}</span>
             @enderror
+            <small class="form-text text-muted">Maximum duration: 14 calendar days including the start and end dates.</small>
             <small class="form-text text-muted">A 14-day period is supported by setting end date 13 days after start date.</small>
         </div>
     </div>

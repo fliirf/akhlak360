@@ -16,11 +16,11 @@ class DashboardFunctionalDataTest extends TestCase
         $this->seed();
 
         $checks = [
-            'admin_hr' => ['/admin/dashboard', ['Completion Progress', 'Recent Audit Logs']],
-            'supervisor' => ['/supervisor/dashboard', ['Submitted Assessments', 'Hasil Penilaian Tim Terbaru']],
-            'employee' => ['/employee/dashboard', ['Personal Result', 'IDP Recommendation']],
-            'management' => ['/management/dashboard', ['Rata-rata Perusahaan', 'Semester Trend', 'Talent Mapping']],
-            'it_admin' => ['/it/dashboard', ['Successful Syncs', 'Reminder Activity', 'Aktivitas Notifikasi']],
+            'admin_hr' => ['/admin/dashboard', ['Progress per Assessor Type', 'Recent Audit Logs']],
+            'supervisor' => ['/supervisor/dashboard', ['Direct Report Assessment Status', 'Aggregated Score by Assessor Type']],
+            'employee' => ['/employee/dashboard', ['Tugas Saya sebagai Assessor', 'Hasil Personal Saya sebagai Assessee']],
+            'management' => ['/management/dashboard', ['Company Average', 'Semester Trend', 'Management Attention by Department']],
+            'it_admin' => ['/it/dashboard', ['Pengguna Aktif 30 Hari', 'Latest Recorded Reminder Activity', 'Report Export History']],
         ];
 
         foreach ($checks as $role => [$url, $sections]) {

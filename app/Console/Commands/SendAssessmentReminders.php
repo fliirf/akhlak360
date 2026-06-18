@@ -21,11 +21,14 @@ class SendAssessmentReminders extends Command
         $today = now()->startOfDay();
         $created = 0;
         $skipped = 0;
+        $inAppEnabled = (bool) config('akhlak360.in_app_notifications_enabled', true);
+        $emailEnabled = (bool) config('akhlak360.email_notifications_enabled', true);
 
         $assignments = AssessmentAssignment::query()
             ->with(['assessmentPeriod', 'assessor.user', 'assessee'])
             ->pending()
             ->whereHas('assessmentPeriod', fn ($query) => $query->active()->whereDate('end_date', '>=', $today))
+            ->whereHas('assessor', fn ($query) => $query->active())
             ->get();
 
         foreach ($assignments as $assignment) {
@@ -46,12 +49,18 @@ class SendAssessmentReminders extends Command
                 continue;
             }
 
-            $title = "Assessment Reminder #{$assignment->id}";
+            if (! $inAppEnabled && ! $emailEnabled) {
+                $skipped++;
 
-            $alreadySentToday = AppNotification::query()
-                ->where('user_id', $user->id)
-                ->where('type', 'assessment_reminder')
-                ->where('title', $title)
+                continue;
+            }
+
+            $title = "Assessment Reminder #{$assignment->id}";
+            $auditDescription = "Sent reminder for assessment assignment #{$assignment->id}.";
+            $alreadySentToday = AuditLog::query()
+                ->where('action', 'assessment_reminder_sent')
+                ->where('module', 'notifications')
+                ->where('description', $auditDescription)
                 ->whereDate('created_at', $today)
                 ->exists();
 
@@ -63,7 +72,7 @@ class SendAssessmentReminders extends Command
 
             $message = "Please complete your {$assignment->assessor_type} assessment for {$assignment->assessee->name} before {$period->end_date->format('d M Y')}.";
 
-            if (config('akhlak360.in_app_notifications_enabled', true)) {
+            if ($inAppEnabled) {
                 AppNotification::create([
                     'user_id' => $user->id,
                     'title' => $title,
@@ -73,9 +82,18 @@ class SendAssessmentReminders extends Command
                 ]);
             }
 
-            if (config('akhlak360.email_notifications_enabled', true)) {
+            if ($emailEnabled) {
                 Mail::to($user->email)->send(new AssessmentReminderMail($title, $message));
             }
+
+            AuditLog::create([
+                'user_id' => $user->id,
+                'action' => 'assessment_reminder_sent',
+                'module' => 'notifications',
+                'description' => $auditDescription,
+                'ip_address' => null,
+                'user_agent' => 'artisan assessment:send-reminders',
+            ]);
 
             $created++;
         }

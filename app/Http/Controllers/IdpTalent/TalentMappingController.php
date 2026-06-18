@@ -32,6 +32,19 @@ class TalentMappingController extends Controller
             : ($periods->firstWhere('status', 'active') ?? $periods->first())?->id;
         $selectedDepartment = isset($validated['department_id']) ? (int) $validated['department_id'] : null;
         $allResults = $this->filteredQuery($request, $selectedPeriod, $selectedDepartment)->get();
+
+        if ($request->user()->hasRole('supervisor')) {
+            return view('idp-talent.talent-mapping.team-summary', [
+                'periods' => $periods,
+                'selectedPeriod' => $selectedPeriod,
+                'categoryCounts' => $this->categoryCounts($allResults),
+                'categoryChart' => [
+                    'labels' => self::CATEGORIES,
+                    'data' => $this->categoryCounts($allResults)->values()->all(),
+                ],
+            ]);
+        }
+
         $results = $this->filteredQuery($request, $selectedPeriod, $selectedDepartment)
             ->paginate(15)
             ->withQueryString();
@@ -105,10 +118,9 @@ class TalentMappingController extends Controller
             ))
             ->when($request->user()->hasRole('employee'), fn (Builder $query) => $query
                 ->where('assessment_results.employee_id', $request->user()->employee?->id ?? 0))
-            ->when($request->user()->hasRole('supervisor'), fn (Builder $query) => $query->where(function (Builder $query) use ($request) {
+            ->when($request->user()->hasRole('supervisor'), fn (Builder $query) => $query->whereHas('employee', function (Builder $query) use ($request) {
                 $supervisorId = $request->user()->employee?->id ?? 0;
-                $query->where('assessment_results.employee_id', $supervisorId)
-                    ->orWhereHas('employee', fn (Builder $employeeQuery) => $employeeQuery->where('supervisor_id', $supervisorId));
+                $query->where('supervisor_id', $supervisorId);
             }))
             ->join('employees', 'employees.id', '=', 'assessment_results.employee_id')
             ->orderBy('employees.name')

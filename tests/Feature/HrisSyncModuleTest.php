@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\HrisSyncLog;
 use App\Models\Position;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -65,9 +66,9 @@ class HrisSyncModuleTest extends TestCase
 
     public function test_manual_sync_logs_activity(): void
     {
-        $it = User::factory()->create(['role' => 'it_admin']);
+        $admin = User::factory()->create(['role' => 'admin_hr']);
 
-        $this->actingAs($it)
+        $this->actingAs($admin)
             ->post('/master-data/hris-sync/manual')
             ->assertRedirect()
             ->assertSessionHas('success');
@@ -75,13 +76,25 @@ class HrisSyncModuleTest extends TestCase
         $this->assertDatabaseHas('hris_sync_logs', [
             'sync_type' => 'manual_sync',
             'status' => 'success',
-            'synced_by' => $it->id,
+            'synced_by' => $admin->id,
         ]);
         $this->assertDatabaseHas('audit_logs', [
-            'user_id' => $it->id,
+            'user_id' => $admin->id,
             'module' => 'hris_sync',
             'action' => 'manual_sync',
         ]);
+
+        $it = User::factory()->create(['role' => 'it_admin']);
+        $this->actingAs($it)
+            ->post('/master-data/hris-sync/manual')
+            ->assertForbidden();
+
+        $this->actingAs($it)
+            ->get('/master-data/hris-sync')
+            ->assertOk()
+            ->assertSee('monitoring-only')
+            ->assertDontSee('Import Employee CSV')
+            ->assertDontSee('Run manual HRIS sync simulation?');
     }
 
     public function test_sample_download_invalid_csv_and_order_independent_supervisor_mapping(): void
@@ -128,7 +141,7 @@ class HrisSyncModuleTest extends TestCase
         $it = User::factory()->create(['role' => 'it_admin']);
 
         foreach (range(1, 12) as $index) {
-            \App\Models\HrisSyncLog::create([
+            HrisSyncLog::create([
                 'sync_type' => 'manual_sync',
                 'status' => 'success',
                 'message' => "Filtered sync {$index}",
@@ -147,5 +160,41 @@ class HrisSyncModuleTest extends TestCase
         $this->actingAs($it)
             ->get('/master-data/hris-sync?status=unknown')
             ->assertSessionHasErrors('status');
+    }
+
+    public function test_invalid_import_rolls_back_all_rows_and_existing_position_level_is_updated(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin_hr']);
+        Position::create(['name' => 'Staff', 'level' => 'OLD']);
+
+        $invalidCsv = implode("\n", [
+            'employee_number,name,department,position,position_level,supervisor_employee_number',
+            'VALID-ROW,Valid Row,Operations,Staff,L2,',
+            'BROKEN-ROW,Broken Row,Operations,Staff,L2,MISSING-SUPERVISOR',
+        ]);
+
+        $this->actingAs($admin)
+            ->post('/master-data/hris-sync/import', [
+                'csv_file' => UploadedFile::fake()->createWithContent('invalid-reference.csv', $invalidCsv),
+            ])
+            ->assertRedirect('/master-data/hris-sync')
+            ->assertSessionHas('warning');
+
+        $this->assertDatabaseMissing('employees', ['employee_number' => 'VALID-ROW']);
+        $this->assertDatabaseMissing('employees', ['employee_number' => 'BROKEN-ROW']);
+        $this->assertSame('OLD', Position::where('name', 'Staff')->value('level'));
+
+        $validCsv = implode("\n", [
+            'employee_number,name,department,position,position_level,supervisor_employee_number',
+            'VALID-ROW,Valid Row,Operations,Staff,L2,',
+        ]);
+
+        $this->actingAs($admin)
+            ->post('/master-data/hris-sync/import', [
+                'csv_file' => UploadedFile::fake()->createWithContent('valid-position.csv', $validCsv),
+            ])
+            ->assertSessionHas('success');
+
+        $this->assertSame('L2', Position::where('name', 'Staff')->value('level'));
     }
 }

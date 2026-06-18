@@ -11,6 +11,8 @@ use App\Models\Position;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -77,42 +79,54 @@ class HrisSyncController extends Controller
             return back()->withInput()->withErrors(['csv_file' => $exception->getMessage()]);
         }
 
-        $success = 0;
-        $failed = 0;
         $messages = [];
-        $successfulRows = [];
+        $incomingNumbers = collect($rows)
+            ->map(fn (array $row) => trim((string) Arr::get($row, 'employee_number', '')))
+            ->filter();
+        $duplicateNumbers = $incomingNumbers->duplicates()->unique();
 
         foreach ($rows as $index => $row) {
             try {
-                $this->syncRow($row, false);
-                $success++;
-                $successfulRows[] = ['index' => $index, 'row' => $row];
+                $this->validateRow($row, $incomingNumbers, $duplicateNumbers);
             } catch (\Throwable $exception) {
-                $failed++;
                 $messages[] = 'Row '.($index + 2).': '.$exception->getMessage();
             }
         }
 
-        foreach ($successfulRows as $item) {
-            try {
-                $this->syncSupervisor($item['row']);
-            } catch (\Throwable $exception) {
-                $failed++;
-                $success--;
-                $messages[] = 'Row '.($item['index'] + 2).': '.$exception->getMessage();
-            }
+        if ($messages !== []) {
+            $message = implode(' | ', array_slice($messages, 0, 5));
+            $this->recordSync($request, 'failed', count($rows), 0, count($rows), $message);
+
+            return redirect()
+                ->route('master-data.hris-sync.index')
+                ->with('warning', $message);
         }
 
-        $status = $failed === 0 ? 'success' : 'failed';
-        $message = $messages === []
-            ? 'CSV import completed successfully.'
-            : implode(' | ', array_slice($messages, 0, 5));
+        try {
+            DB::transaction(function () use ($rows): void {
+                foreach ($rows as $row) {
+                    $this->syncRow($row, false);
+                }
 
-        $this->recordSync($request, $status, count($rows), $success, $failed, $message);
+                foreach ($rows as $row) {
+                    $this->syncSupervisor($row);
+                }
+            });
+        } catch (\Throwable $exception) {
+            report($exception);
+            $message = 'CSV import rolled back because one or more records could not be synchronized.';
+            $this->recordSync($request, 'failed', count($rows), 0, count($rows), $message);
+
+            return redirect()
+                ->route('master-data.hris-sync.index')
+                ->with('warning', $message);
+        }
+
+        $this->recordSync($request, 'success', count($rows), count($rows), 0, 'CSV import completed successfully.');
 
         return redirect()
             ->route('master-data.hris-sync.index')
-            ->with($failed === 0 ? 'success' : 'warning', $message);
+            ->with('success', 'CSV import completed successfully.');
     }
 
     public function manualSync(Request $request): RedirectResponse
@@ -220,7 +234,7 @@ class HrisSyncController extends Controller
         $positionName = trim((string) Arr::get($row, 'position', ''));
 
         if ($positionName !== '') {
-            $position = Position::firstOrCreate(
+            $position = Position::updateOrCreate(
                 ['name' => $positionName],
                 ['level' => trim((string) Arr::get($row, 'position_level', '')) ?: null],
             );
@@ -241,6 +255,39 @@ class HrisSyncController extends Controller
                 'last_synced_at' => now(),
             ],
         );
+    }
+
+    private function validateRow(array $row, Collection $incomingNumbers, Collection $duplicateNumbers): void
+    {
+        $employeeNumber = trim((string) Arr::get($row, 'employee_number', ''));
+        $name = trim((string) Arr::get($row, 'name', ''));
+        $department = trim((string) (Arr::get($row, 'department') ?: Arr::get($row, 'department_name', '')));
+        $status = trim((string) Arr::get($row, 'employment_status', ''));
+        $supervisorNumber = trim((string) Arr::get($row, 'supervisor_employee_number', ''));
+
+        if ($employeeNumber === '' || $name === '' || $department === '') {
+            throw new \InvalidArgumentException('employee_number, name, and department are required.');
+        }
+
+        if ($duplicateNumbers->contains($employeeNumber)) {
+            throw new \InvalidArgumentException("Duplicate employee_number {$employeeNumber} appears in the CSV.");
+        }
+
+        if ($status !== '' && ! in_array($status, ['active', 'inactive'], true)) {
+            throw new \InvalidArgumentException('employment_status must be active or inactive.');
+        }
+
+        if ($supervisorNumber === $employeeNumber) {
+            throw new \InvalidArgumentException('An employee cannot supervise themselves.');
+        }
+
+        if (
+            $supervisorNumber !== ''
+            && ! $incomingNumbers->contains($supervisorNumber)
+            && ! Employee::where('employee_number', $supervisorNumber)->exists()
+        ) {
+            throw new \InvalidArgumentException("Supervisor {$supervisorNumber} was not found.");
+        }
     }
 
     private function syncSupervisor(array $row): void

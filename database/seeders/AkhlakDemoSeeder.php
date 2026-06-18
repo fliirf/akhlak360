@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Http\Controllers\Assessment\AssessmentFormController;
 use App\Models\AppNotification;
 use App\Models\AssessmentAssignment;
 use App\Models\AssessmentPeriod;
@@ -15,6 +16,7 @@ use App\Models\HrisSyncLog;
 use App\Models\IdpRecommendation;
 use App\Models\PeerApproval;
 use App\Models\Position;
+use App\Models\ReportExport;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
@@ -55,6 +57,7 @@ class AkhlakDemoSeeder extends Seeder
         $this->seedNotifications($users, $period);
         $this->seedAuditLogs($users);
         $this->seedHrisSyncLogs($users);
+        $this->seedReportExports($users, $period);
     }
 
     /**
@@ -78,7 +81,7 @@ class AkhlakDemoSeeder extends Seeder
                     ...$record,
                     'password' => $password,
                     'email_verified_at' => now(),
-                    'sso_provider' => 'simulated_sso',
+                    'sso_provider' => 'simulated_personal_sso',
                     'sso_id' => 'sso-'.$key,
                     'last_login_at' => now()->subDays(strlen($key)),
                 ]),
@@ -125,25 +128,25 @@ class AkhlakDemoSeeder extends Seeder
     private function seedEmployees(array $users, Collection $departments, Collection $positions): Collection
     {
         $employeeRecords = [
-            ['number' => 'EN-0001', 'name' => 'Dewi Management', 'email' => 'management@example.com', 'department' => 'Corporate Strategy', 'position' => 'General Manager', 'user' => 'management'],
-            ['number' => 'EN-0002', 'name' => 'Admin Human Capital', 'email' => 'admin_hr@example.com', 'department' => 'Human Capital', 'position' => 'Manager', 'supervisor' => 'EN-0001', 'user' => 'admin_hr'],
-            ['number' => 'EN-0003', 'name' => 'Budi Supervisor', 'email' => 'supervisor@example.com', 'department' => 'Operations', 'position' => 'Supervisor', 'supervisor' => 'EN-0001', 'user' => 'supervisor'],
-            ['number' => 'EN-0004', 'name' => 'Raka IT Admin', 'email' => 'it@example.com', 'department' => 'IT', 'position' => 'Manager', 'supervisor' => 'EN-0001', 'user' => 'it_admin'],
+            ['number' => 'EMP002', 'name' => 'Dewi Management', 'email' => 'management@example.com', 'department' => 'Corporate Strategy', 'position' => 'General Manager', 'user' => 'management'],
+            ['number' => 'EMP001', 'name' => 'Admin Human Capital', 'email' => 'admin_hr@example.com', 'department' => 'Human Capital', 'position' => 'Manager', 'supervisor' => 'EMP002', 'user' => 'admin_hr'],
+            ['number' => 'EN-0003', 'name' => 'Budi Supervisor', 'email' => 'supervisor@example.com', 'department' => 'Operations', 'position' => 'Supervisor', 'supervisor' => 'EMP002', 'user' => 'supervisor'],
+            ['number' => 'EMP003', 'name' => 'Raka IT Admin', 'email' => 'it@example.com', 'department' => 'IT', 'position' => 'Manager', 'supervisor' => 'EMP002', 'user' => 'it_admin'],
             ['number' => 'EN-0005', 'name' => 'Sari Employee', 'email' => 'employee@example.com', 'department' => 'Operations', 'position' => 'Staff', 'supervisor' => 'EN-0003', 'user' => 'employee'],
             ['number' => 'EN-0006', 'name' => 'Andi Pratama', 'email' => 'andi.pratama@example.com', 'department' => 'Operations', 'position' => 'Senior Staff', 'supervisor' => 'EN-0003'],
             ['number' => 'EN-0007', 'name' => 'Maya Lestari', 'email' => 'maya.lestari@example.com', 'department' => 'Operations', 'position' => 'Staff', 'supervisor' => 'EN-0003'],
             ['number' => 'EN-0008', 'name' => 'Fajar Nugroho', 'email' => 'fajar.nugroho@example.com', 'department' => 'Operations', 'position' => 'Staff', 'supervisor' => 'EN-0003'],
-            ['number' => 'EN-0009', 'name' => 'Nina Kartika', 'email' => 'nina.kartika@example.com', 'department' => 'Human Capital', 'position' => 'Supervisor', 'supervisor' => 'EN-0002'],
+            ['number' => 'EN-0009', 'name' => 'Nina Kartika', 'email' => 'nina.kartika@example.com', 'department' => 'Human Capital', 'position' => 'Supervisor', 'supervisor' => 'EMP001'],
             ['number' => 'EN-0010', 'name' => 'Rini Astuti', 'email' => 'rini.astuti@example.com', 'department' => 'Human Capital', 'position' => 'Staff', 'supervisor' => 'EN-0009'],
             ['number' => 'EN-0011', 'name' => 'Galih Saputra', 'email' => 'galih.saputra@example.com', 'department' => 'Human Capital', 'position' => 'Senior Staff', 'supervisor' => 'EN-0009'],
-            ['number' => 'EN-0012', 'name' => 'Agus Permana', 'email' => 'agus.permana@example.com', 'department' => 'Finance', 'position' => 'Manager', 'supervisor' => 'EN-0001'],
+            ['number' => 'EN-0012', 'name' => 'Agus Permana', 'email' => 'agus.permana@example.com', 'department' => 'Finance', 'position' => 'Manager', 'supervisor' => 'EMP002'],
             ['number' => 'EN-0013', 'name' => 'Putri Maharani', 'email' => 'putri.maharani@example.com', 'department' => 'Finance', 'position' => 'Supervisor', 'supervisor' => 'EN-0012'],
             ['number' => 'EN-0014', 'name' => 'Joko Santoso', 'email' => 'joko.santoso@example.com', 'department' => 'Finance', 'position' => 'Staff', 'supervisor' => 'EN-0013'],
             ['number' => 'EN-0015', 'name' => 'Lina Wibowo', 'email' => 'lina.wibowo@example.com', 'department' => 'Finance', 'position' => 'Senior Staff', 'supervisor' => 'EN-0013'],
-            ['number' => 'EN-0016', 'name' => 'Dimas Arya', 'email' => 'dimas.arya@example.com', 'department' => 'IT', 'position' => 'Supervisor', 'supervisor' => 'EN-0004'],
+            ['number' => 'EN-0016', 'name' => 'Dimas Arya', 'email' => 'dimas.arya@example.com', 'department' => 'IT', 'position' => 'Supervisor', 'supervisor' => 'EMP003'],
             ['number' => 'EN-0017', 'name' => 'Citra Amalia', 'email' => 'citra.amalia@example.com', 'department' => 'IT', 'position' => 'Staff', 'supervisor' => 'EN-0016'],
             ['number' => 'EN-0018', 'name' => 'Yusuf Hidayat', 'email' => 'yusuf.hidayat@example.com', 'department' => 'IT', 'position' => 'Senior Staff', 'supervisor' => 'EN-0016'],
-            ['number' => 'EN-0019', 'name' => 'Tania Safitri', 'email' => 'tania.safitri@example.com', 'department' => 'Corporate Strategy', 'position' => 'Supervisor', 'supervisor' => 'EN-0001'],
+            ['number' => 'EN-0019', 'name' => 'Tania Safitri', 'email' => 'tania.safitri@example.com', 'department' => 'Corporate Strategy', 'position' => 'Supervisor', 'supervisor' => 'EMP002'],
             ['number' => 'EN-0020', 'name' => 'Reza Mahendra', 'email' => 'reza.mahendra@example.com', 'department' => 'Corporate Strategy', 'position' => 'Staff', 'supervisor' => 'EN-0019'],
         ];
 
@@ -159,6 +162,8 @@ class AkhlakDemoSeeder extends Seeder
                 'email' => $record['email'],
                 'employment_status' => 'active',
                 'hris_external_id' => 'HRIS-'.$record['number'],
+                'sso_code_hash' => Hash::make($this->demoSsoCode($record['number'])),
+                'sso_code_generated_at' => now(),
                 'last_synced_at' => now()->subHours((int) substr($record['number'], -2)),
             ]));
         }
@@ -174,6 +179,18 @@ class AkhlakDemoSeeder extends Seeder
         }
 
         return $employeesByNumber->values();
+    }
+
+    private function demoSsoCode(string $employeeNumber): string
+    {
+        return match ($employeeNumber) {
+            'EMP001' => 'AKH-HR01-2026',
+            'EMP002' => 'AKH-MGT2-2026',
+            'EMP003' => 'AKH-IT03-2026',
+            'EN-0003' => 'AKH-SPV3-2026',
+            'EN-0005' => 'AKH-EMP5-2026',
+            default => 'AKH-'.str_replace('-', '', $employeeNumber).'-26',
+        };
     }
 
     private function seedAssessmentPeriod(): AssessmentPeriod
@@ -308,13 +325,26 @@ class AkhlakDemoSeeder extends Seeder
                 'submitted_at' => now()->subDays($index % 10),
             ]);
 
-            foreach (self::CORE_VALUES as $coreValue => $indicator) {
-                AssessmentResponse::create([
-                    'assessment_assignment_id' => $assignment->id,
-                    'core_value' => $coreValue,
-                    'indicator' => $indicator,
-                    'score' => 3 + (($assignment->id + strlen($coreValue)) % 3),
-                ]);
+            $baseScore = match ($assignment->assessee_employee_id % 5) {
+                1 => 2,
+                2 => 3,
+                3, 0 => 4,
+                default => 5,
+            };
+            $weakestCoreIndex = $assignment->assessee_employee_id % count(AssessmentFormController::INDICATORS);
+
+            foreach (AssessmentFormController::INDICATORS as $coreValue => $indicators) {
+                $coreValueIndex = array_search($coreValue, array_keys(AssessmentFormController::INDICATORS), true);
+                foreach ($indicators as $indicatorIndex => $indicator) {
+                    AssessmentResponse::create([
+                        'assessment_assignment_id' => $assignment->id,
+                        'core_value' => $coreValue,
+                        'indicator' => $indicator,
+                        'score' => $coreValueIndex === $weakestCoreIndex
+                            ? max(1, $baseScore - 1)
+                            : $baseScore,
+                    ]);
+                }
             }
         }
     }
@@ -413,11 +443,12 @@ class AkhlakDemoSeeder extends Seeder
             ['user' => 'employee', 'action' => 'submit', 'module' => 'assessment', 'description' => 'Mengirim self assessment.'],
             ['user' => 'management', 'action' => 'view', 'module' => 'dashboard', 'description' => 'Melihat dashboard analitik manajemen.'],
             ['user' => 'it_admin', 'action' => 'simulate_sso', 'module' => 'authentication', 'description' => 'Melakukan simulasi login SSO.'],
+            ['user' => null, 'action' => 'send_reminders', 'module' => 'notifications', 'description' => 'Assessment reminder command generated 2 reminders and skipped 4.'],
         ];
 
         foreach ($logs as $index => $log) {
             AuditLog::create([
-                'user_id' => $users[$log['user']]->id,
+                'user_id' => $log['user'] ? $users[$log['user']]->id : null,
                 'action' => $log['action'],
                 'module' => $log['module'],
                 'description' => $log['description'],
@@ -450,6 +481,28 @@ class AkhlakDemoSeeder extends Seeder
             'failed_records' => 2,
             'message' => 'Simulasi kegagalan validasi email HRIS.',
             'synced_by' => $users['it_admin']->id,
+        ]);
+    }
+
+    /**
+     * @param  array<string, User>  $users
+     */
+    private function seedReportExports(array $users, AssessmentPeriod $period): void
+    {
+        ReportExport::create([
+            'user_id' => $users['admin_hr']->id,
+            'assessment_period_id' => $period->id,
+            'report_type' => 'csv',
+            'file_path' => 'akhlak360-report-demo.csv',
+            'status' => 'generated',
+        ]);
+
+        ReportExport::create([
+            'user_id' => $users['management']->id,
+            'assessment_period_id' => $period->id,
+            'report_type' => 'pdf',
+            'file_path' => null,
+            'status' => 'failed',
         ]);
     }
 }

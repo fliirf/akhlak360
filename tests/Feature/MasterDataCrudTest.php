@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\Position;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class MasterDataCrudTest extends TestCase
@@ -93,11 +94,12 @@ class MasterDataCrudTest extends TestCase
         $admin = $this->admin();
         $department = Department::create(['code' => 'IT', 'name' => 'IT']);
         $position = Position::create(['name' => 'Staff', 'level' => 'L1']);
+        $supervisorPosition = Position::create(['name' => 'Supervisor', 'level' => 'L3']);
         $linkedUser = User::factory()->create(['role' => 'employee']);
 
         $supervisor = Employee::create([
             'department_id' => $department->id,
-            'position_id' => $position->id,
+            'position_id' => $supervisorPosition->id,
             'employee_number' => 'SUP-001',
             'name' => 'Supervisor Demo',
             'email' => 'supervisor.demo@example.com',
@@ -116,9 +118,17 @@ class MasterDataCrudTest extends TestCase
                 'user_id' => $linkedUser->id,
                 'hris_external_id' => 'HRIS-EMP-100',
             ])
-            ->assertRedirect('/master-data/employees');
+            ->assertOk()
+            ->assertSee('Kode SSO Personal')
+            ->assertHeader('Cache-Control', 'must-revalidate, no-cache, no-store, private');
 
         $employee = Employee::where('employee_number', 'EMP-100')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->get("/master-data/employees/{$employee->id}/edit")
+            ->assertOk()
+            ->assertSee('Employee Demo')
+            ->assertSee($linkedUser->name);
 
         $this->actingAs($admin)
             ->get('/master-data/employees?search=Employee+Demo&department_id='.$department->id.'&employment_status=active')
@@ -146,5 +156,128 @@ class MasterDataCrudTest extends TestCase
         $this->assertSame('inactive', $employee->fresh()->employment_status);
         $this->assertDatabaseHas('audit_logs', ['module' => 'employees', 'action' => 'create']);
         $this->assertDatabaseHas('audit_logs', ['module' => 'employees', 'action' => 'deactivate']);
+    }
+
+    public function test_supervisor_options_and_validation_exclude_ordinary_staff(): void
+    {
+        $admin = $this->admin();
+        $department = Department::create(['code' => 'ORG', 'name' => 'Organization']);
+        $staffPosition = Position::create(['name' => 'Staff', 'level' => 'L1']);
+        $leaderPosition = Position::create(['name' => 'Supervisor', 'level' => 'L3']);
+        $ordinaryStaff = Employee::create([
+            'department_id' => $department->id,
+            'position_id' => $staffPosition->id,
+            'employee_number' => 'STAFF-001',
+            'name' => 'Ordinary Staff',
+            'employment_status' => 'active',
+        ]);
+        $leader = Employee::create([
+            'department_id' => $department->id,
+            'position_id' => $leaderPosition->id,
+            'employee_number' => 'LEADER-001',
+            'name' => 'Leadership Candidate',
+            'employment_status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->get('/master-data/employees/create')
+            ->assertOk()
+            ->assertSee('LEADER-001 - Leadership Candidate')
+            ->assertDontSee('STAFF-001 - Ordinary Staff');
+
+        $this->actingAs($admin)
+            ->post('/master-data/employees', [
+                'employee_number' => 'NEW-STAFF',
+                'name' => 'New Staff',
+                'department_id' => $department->id,
+                'position_id' => $staffPosition->id,
+                'supervisor_id' => $ordinaryStaff->id,
+                'employment_status' => 'active',
+            ])
+            ->assertSessionHasErrors('supervisor_id');
+
+        $this->actingAs($admin)
+            ->post('/master-data/employees', [
+                'employee_number' => 'NEW-LEAD',
+                'name' => 'New Team Member',
+                'department_id' => $department->id,
+                'position_id' => $staffPosition->id,
+                'supervisor_id' => $leader->id,
+                'employment_status' => 'active',
+            ])
+            ->assertOk()
+            ->assertSee('Kode SSO Personal');
+    }
+
+    public function test_employee_search_remains_scoped_by_department_and_status(): void
+    {
+        $admin = $this->admin();
+        $insideDepartment = Department::create(['code' => 'IN', 'name' => 'Inside']);
+        $outsideDepartment = Department::create(['code' => 'OUT', 'name' => 'Outside']);
+
+        Employee::create([
+            'department_id' => $insideDepartment->id,
+            'employee_number' => 'IN-001',
+            'name' => 'Unrelated Active',
+            'employment_status' => 'active',
+        ]);
+        Employee::create([
+            'department_id' => $outsideDepartment->id,
+            'employee_number' => 'OUT-001',
+            'name' => 'Needle Outside',
+            'employment_status' => 'active',
+        ]);
+        Employee::create([
+            'department_id' => $insideDepartment->id,
+            'employee_number' => 'IN-002',
+            'name' => 'Needle Inactive',
+            'employment_status' => 'inactive',
+        ]);
+
+        $this->actingAs($admin)
+            ->get('/master-data/employees?search=Needle&department_id='.$insideDepartment->id.'&employment_status=active')
+            ->assertOk()
+            ->assertDontSee('Needle Outside')
+            ->assertDontSee('Needle Inactive');
+    }
+
+    public function test_admin_can_generate_and_reset_a_personal_sso_code(): void
+    {
+        $admin = $this->admin();
+        $department = Department::create(['code' => 'SSO', 'name' => 'SSO Test']);
+        $employee = Employee::create([
+            'department_id' => $department->id,
+            'employee_number' => 'SSO-001',
+            'name' => 'Personal SSO Employee',
+            'email' => 'personal.sso@example.com',
+            'employment_status' => 'active',
+        ]);
+
+        $firstResponse = $this->actingAs($admin)
+            ->post("/master-data/employees/{$employee->id}/sso-code")
+            ->assertOk()
+            ->assertSee('Kode SSO Personal')
+            ->assertHeader('Cache-Control', 'must-revalidate, no-cache, no-store, private');
+        preg_match('/<code[^>]*>([^<]+)<\/code>/', $firstResponse->getContent(), $firstMatch);
+        $firstCode = trim(html_entity_decode($firstMatch[1]));
+
+        $this->assertTrue(Hash::check($firstCode, $employee->fresh()->sso_code_hash));
+        $this->assertNotNull($employee->fresh()->sso_code_generated_at);
+
+        $secondResponse = $this->actingAs($admin)
+            ->post("/master-data/employees/{$employee->id}/sso-code")
+            ->assertOk()
+            ->assertSee('Kode SSO Personal');
+        preg_match('/<code[^>]*>([^<]+)<\/code>/', $secondResponse->getContent(), $secondMatch);
+        $secondCode = trim(html_entity_decode($secondMatch[1]));
+
+        $this->assertNotSame($firstCode, $secondCode);
+        $this->assertFalse(Hash::check($firstCode, $employee->fresh()->sso_code_hash));
+        $this->assertTrue(Hash::check($secondCode, $employee->fresh()->sso_code_hash));
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $admin->id,
+            'module' => 'employees',
+            'action' => 'reset_sso_code',
+        ]);
     }
 }

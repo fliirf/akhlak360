@@ -9,6 +9,7 @@ use App\Models\AssessmentResult;
 use App\Models\AuditLog;
 use App\Models\Department;
 use App\Models\ReportExport;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,7 +20,6 @@ use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
-use Barryvdh\DomPDF\Facade\Pdf;
 
 class ReportController extends Controller
 {
@@ -28,6 +28,13 @@ class ReportController extends Controller
         'Cukup',
         'Baik',
         'Sangat Baik',
+    ];
+
+    private const TALENT_CATEGORIES = [
+        'High Potential',
+        'Solid Contributor',
+        'Core Contributor',
+        'Need Development',
     ];
 
     private const HEADERS = [
@@ -61,6 +68,7 @@ class ReportController extends Controller
             'periods' => AssessmentPeriod::orderByDesc('year')->orderByDesc('start_date')->get(),
             'departments' => Department::active()->orderBy('name')->get(),
             'categories' => self::CATEGORIES,
+            'talentCategories' => self::TALENT_CATEGORIES,
             'results' => (clone $query)
                 ->paginate(15)
                 ->withQueryString(),
@@ -177,6 +185,7 @@ class ReportController extends Controller
                 fn (Builder $employeeQuery) => $employeeQuery->where('department_id', $request->integer('department_id'))
             ))
             ->when($request->filled('category'), fn (Builder $query) => $query->where('category', $request->category))
+            ->when($request->filled('talent_category'), fn (Builder $query) => $query->where('talent_mapping_category', $request->talent_category))
             ->when($request->boolean('below_threshold'), fn (Builder $query) => $query->whereRaw(
                 'assessment_results.final_score < (select threshold_score from assessment_periods where assessment_periods.id = assessment_results.assessment_period_id)'
             ))
@@ -187,7 +196,8 @@ class ReportController extends Controller
 
     private function row(AssessmentResult $result): array
     {
-        $idp = $result->employee?->idpRecommendations->first();
+        $idp = $result->employee?->idpRecommendations
+            ->firstWhere('assessment_period_id', $result->assessment_period_id);
 
         return [
             $result->assessmentPeriod?->name,
@@ -238,6 +248,7 @@ class ReportController extends Controller
             'period_id' => ['nullable', 'integer', 'exists:assessment_periods,id'],
             'department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')->where('is_active', true)],
             'category' => ['nullable', Rule::in(self::CATEGORIES)],
+            'talent_category' => ['nullable', Rule::in(self::TALENT_CATEGORIES)],
             'below_threshold' => ['nullable', 'boolean'],
         ]);
     }

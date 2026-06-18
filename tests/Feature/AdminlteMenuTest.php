@@ -25,7 +25,9 @@ class AdminlteMenuTest extends TestCase
             ->assertSee('Assign Assessors')
             ->assertSee('Core Value Dashboard')
             ->assertSee('Reports')
-            ->assertDontSee('Audit &amp; Compliance', false)
+            ->assertSee('Audit &amp; Compliance', false)
+            ->assertSee('Audit Logs')
+            ->assertSee('Compliance Monitoring')
             ->assertDontSee('System Settings');
     }
 
@@ -75,8 +77,9 @@ class AdminlteMenuTest extends TestCase
         $this->actingAs($user)
             ->get('/supervisor/dashboard')
             ->assertOk()
-            ->assertSee('Analytics')
-            ->assertSee('Gap Analysis')
+            ->assertDontSee('Analytics')
+            ->assertSee('Team Results')
+            ->assertSee('Team IDP')
             ->assertDontSee('Core Value Dashboard');
     }
 

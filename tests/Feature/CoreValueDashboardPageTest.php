@@ -17,7 +17,7 @@ class CoreValueDashboardPageTest extends TestCase
     public function test_guest_is_redirected_to_login(): void
     {
         $this->get('/analytics/core-value-dashboard')
-            ->assertRedirect('/login');
+            ->assertRedirect('/sso/login');
     }
 
     public function test_allowed_roles_can_access_core_value_dashboard(): void

@@ -40,9 +40,20 @@ class AssessmentResultService
                 ->where('assessment_period_id', $periodId)
                 ->where('assessee_employee_id', $employeeId)
                 ->submitted()
-                ->get();
+                ->get()
+                ->filter(fn (AssessmentAssignment $assignment) => $this->hasCompleteValidResponses($assignment))
+                ->values();
 
             if ($assignments->isEmpty()) {
+                AssessmentResult::query()
+                    ->where('assessment_period_id', $periodId)
+                    ->where('employee_id', $employeeId)
+                    ->delete();
+                IdpRecommendation::query()
+                    ->where('assessment_period_id', $periodId)
+                    ->where('employee_id', $employeeId)
+                    ->delete();
+
                 return null;
             }
 
@@ -98,7 +109,14 @@ class AssessmentResultService
             ->where('assessment_period_id', $periodId)
             ->submitted()
             ->distinct()
-            ->pluck('assessee_employee_id');
+            ->pluck('assessee_employee_id')
+            ->merge(
+                AssessmentResult::query()
+                    ->where('assessment_period_id', $periodId)
+                    ->pluck('employee_id')
+            )
+            ->unique()
+            ->values();
 
         $count = 0;
 
@@ -119,6 +137,25 @@ class AssessmentResultService
             ->groupBy('assessor_type')
             ->map(fn (Collection $typeAssignments) => $this->averageAssignments($typeAssignments))
             ->all();
+    }
+
+    private function hasCompleteValidResponses(AssessmentAssignment $assignment): bool
+    {
+        if ($assignment->responses->count() !== 18) {
+            return false;
+        }
+
+        $expectedCoreValues = array_keys(self::CORE_VALUES);
+        $grouped = $assignment->responses->groupBy('core_value');
+
+        if ($grouped->keys()->sort()->values()->all() !== collect($expectedCoreValues)->sort()->values()->all()) {
+            return false;
+        }
+
+        return $grouped->every(
+            fn (Collection $responses) => $responses->count() === 3
+                && $responses->every(fn ($response) => in_array((int) $response->score, [1, 2, 3, 4, 5], true))
+        );
     }
 
     private function averageAssignments(Collection $assignments): array

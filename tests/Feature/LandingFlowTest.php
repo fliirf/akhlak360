@@ -13,7 +13,7 @@ class LandingFlowTest extends TestCase
     public function test_guest_root_redirects_to_login(): void
     {
         $this->get('/')
-            ->assertRedirect('/login');
+            ->assertRedirect('/sso/login');
     }
 
     public function test_authenticated_root_redirects_by_role(): void

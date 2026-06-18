@@ -1,7 +1,7 @@
 @csrf
 
 <div class="row">
-    <div class="col-md-4">
+    <div class="col-md-6">
         <div class="form-group">
             <label for="assessment_period_id">Assessment Period</label>
             <select id="assessment_period_id" name="assessment_period_id" class="form-control @error('assessment_period_id') is-invalid @enderror" required>
@@ -16,7 +16,7 @@
             @enderror
         </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-6">
         <div class="form-group">
             <label for="assessor_type">Assessor Type</label>
             <select id="assessor_type" name="assessor_type" class="form-control @error('assessor_type') is-invalid @enderror" required>
@@ -25,19 +25,6 @@
                 @endforeach
             </select>
             @error('assessor_type')
-                <span class="invalid-feedback">{{ $message }}</span>
-            @enderror
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="form-group">
-            <label for="status">Status</label>
-            <select id="status" name="status" class="form-control @error('status') is-invalid @enderror" required>
-                @foreach (['pending', 'submitted'] as $status)
-                    <option value="{{ $status }}" @selected(old('status', $assignment->status) === $status)>{{ ucfirst($status) }}</option>
-                @endforeach
-            </select>
-            @error('status')
                 <span class="invalid-feedback">{{ $message }}</span>
             @enderror
         </div>
@@ -81,7 +68,7 @@
 
 <div class="alert alert-info">
     <i class="fas fa-info-circle mr-1"></i>
-    Assessor and assessee cannot be the same except self assignments. For self assignments, both must match.
+    New assignments are always pending and can only be created for the active period. Assessor and assessee cannot be the same except self assignments.
 </div>
 
 <div class="d-flex justify-content-between">

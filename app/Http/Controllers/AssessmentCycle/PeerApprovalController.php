@@ -10,6 +10,7 @@ use App\Models\Employee;
 use App\Models\PeerApproval;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -43,7 +44,7 @@ class PeerApprovalController extends Controller
         return view('assessment-cycle.peer-approvals.index', [
             'peerApprovals' => $peerApprovals,
             'periods' => AssessmentPeriod::orderByDesc('year')->orderByDesc('start_date')->get(),
-            'activePeriod' => AssessmentPeriod::active()->first(),
+            'activePeriod' => AssessmentPeriod::open()->first(),
             'employees' => Employee::active()->with(['department', 'supervisor'])->orderBy('name')->get(),
             'summary' => [
                 'pending' => (clone $query)->pending()->count(),
@@ -59,25 +60,32 @@ class PeerApprovalController extends Controller
 
         $data = $request->validate([
             'assessment_period_id' => ['required', 'exists:assessment_periods,id'],
-            'employee_id' => ['required', 'exists:employees,id'],
-            'peer_employee_id' => ['required', 'exists:employees,id', 'different:employee_id'],
+            'employee_id' => [
+                'required',
+                Rule::exists('employees', 'id')->where('employment_status', 'active'),
+            ],
+            'peer_employee_id' => [
+                'required',
+                Rule::exists('employees', 'id')->where('employment_status', 'active'),
+                'different:employee_id',
+            ],
             'notes' => ['nullable', 'string'],
         ]);
 
-        $period = AssessmentPeriod::active()->whereKey($data['assessment_period_id'])->first();
+        $period = AssessmentPeriod::open()->whereKey($data['assessment_period_id'])->first();
 
         if (! $period) {
             return back()
                 ->withInput()
-                ->withErrors(['assessment_period_id' => 'Peer assessors can only be proposed for an active period.']);
+                ->withErrors(['assessment_period_id' => 'Peer assessors can only be proposed while the assessment period is open.']);
         }
 
         $employee = Employee::with('supervisor')->findOrFail($data['employee_id']);
 
-        if (! $employee->supervisor_id) {
+        if (! $employee->supervisor_id || $employee->supervisor?->employment_status !== 'active') {
             return back()
                 ->withInput()
-                ->withErrors(['employee_id' => 'Selected employee does not have a supervisor.']);
+                ->withErrors(['employee_id' => 'Selected employee does not have an active supervisor.']);
         }
 
         $approval = PeerApproval::updateOrCreate([
@@ -106,20 +114,38 @@ class PeerApprovalController extends Controller
             'notes' => ['nullable', 'string'],
         ]);
 
-        $peerApproval->update([
-            'status' => 'approved',
-            'notes' => $data['notes'] ?? $peerApproval->notes,
-            'approved_at' => now(),
-        ]);
+        $peerApproval->loadMissing(['assessmentPeriod', 'employee', 'peerEmployee']);
+        if ($peerApproval->status !== 'pending') {
+            return back()->with('warning', 'Only pending peer proposals can be approved.');
+        }
 
-        AssessmentAssignment::updateOrCreate([
-            'assessment_period_id' => $peerApproval->assessment_period_id,
-            'assessor_employee_id' => $peerApproval->peer_employee_id,
-            'assessee_employee_id' => $peerApproval->employee_id,
-            'assessor_type' => 'peer',
-        ], [
-            'status' => 'pending',
-        ]);
+        if (! $peerApproval->assessmentPeriod?->isOpen()) {
+            return back()->with('warning', 'This peer proposal cannot be approved because its assessment period is not open.');
+        }
+
+        if (
+            $peerApproval->employee?->employment_status !== 'active'
+            || $peerApproval->peerEmployee?->employment_status !== 'active'
+        ) {
+            return back()->with('warning', 'This peer proposal contains an inactive employee and cannot be approved.');
+        }
+
+        DB::transaction(function () use ($peerApproval, $data): void {
+            $peerApproval->update([
+                'status' => 'approved',
+                'notes' => $data['notes'] ?? $peerApproval->notes,
+                'approved_at' => now(),
+            ]);
+
+            AssessmentAssignment::firstOrCreate([
+                'assessment_period_id' => $peerApproval->assessment_period_id,
+                'assessor_employee_id' => $peerApproval->peer_employee_id,
+                'assessee_employee_id' => $peerApproval->employee_id,
+                'assessor_type' => 'peer',
+            ], [
+                'status' => 'pending',
+            ]);
+        });
 
         $this->audit($request, 'approve', "Approved peer assessor {$peerApproval->peerEmployee?->name} for {$peerApproval->employee?->name}.");
 
@@ -135,6 +161,15 @@ class PeerApprovalController extends Controller
         $data = $request->validate([
             'notes' => ['nullable', 'string'],
         ]);
+
+        $peerApproval->loadMissing('assessmentPeriod');
+        if ($peerApproval->status !== 'pending') {
+            return back()->with('warning', 'Only pending peer proposals can be rejected.');
+        }
+
+        if (! $peerApproval->assessmentPeriod?->isOpen()) {
+            return back()->with('warning', 'This peer proposal cannot be rejected because its assessment period is not open.');
+        }
 
         $peerApproval->update([
             'status' => 'rejected',

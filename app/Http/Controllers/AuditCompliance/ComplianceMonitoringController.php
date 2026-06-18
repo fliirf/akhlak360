@@ -37,10 +37,10 @@ class ComplianceMonitoringController extends Controller
         $total = (clone $assignmentQuery)->count();
         $submitted = (clone $assignmentQuery)->submitted()->count();
         $pending = (clone $assignmentQuery)->pending()->count();
-        $overdue = (clone $assignmentQuery)
+        $overdueQuery = (clone $assignmentQuery)
             ->pending()
-            ->whereHas('assessmentPeriod', fn (Builder $query) => $query->whereDate('end_date', '<', now()->toDateString()))
-            ->count();
+            ->whereHas('assessmentPeriod', fn (Builder $query) => $query->whereDate('end_date', '<', today()));
+        $overdue = (clone $overdueQuery)->count();
 
         return view('audit-compliance.compliance-monitoring', [
             'periods' => $periods,
@@ -54,9 +54,7 @@ class ComplianceMonitoringController extends Controller
                 'completionRate' => $total === 0 ? 0 : round(($submitted / $total) * 100, 1),
             ],
             'pendingAssignments' => (clone $assignmentQuery)->pending()->latest()->paginate(10, ['*'], 'pending_page')->withQueryString(),
-            'overdueAssignments' => (clone $assignmentQuery)
-                ->pending()
-                ->whereHas('assessmentPeriod', fn (Builder $query) => $query->whereDate('end_date', '<', now()->toDateString()))
+            'overdueAssignments' => $overdueQuery
                 ->latest()
                 ->paginate(10, ['*'], 'overdue_page')
                 ->withQueryString(),
@@ -65,7 +63,7 @@ class ComplianceMonitoringController extends Controller
 
     public function sendReminders(Request $request): RedirectResponse
     {
-        abort_unless($request->user()->hasRole('admin_hr'), 403);
+        abort_unless($request->user()->hasRole('it_admin'), 403);
 
         Artisan::call('assessment:send-reminders');
 

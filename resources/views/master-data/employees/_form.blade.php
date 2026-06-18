@@ -75,12 +75,16 @@
                 @foreach ($supervisors as $supervisor)
                     <option value="{{ $supervisor->id }}" @selected((int) old('supervisor_id', $employee->supervisor_id) === $supervisor->id)>
                         {{ $supervisor->employee_number }} - {{ $supervisor->name }}
+                        {{ $supervisor->position ? '('.$supervisor->position->name.' / '.$supervisor->position->level.')' : '' }}
                     </option>
                 @endforeach
             </select>
             @error('supervisor_id')
                 <span class="invalid-feedback">{{ $message }}</span>
             @enderror
+            <small class="form-text text-muted">
+                Hanya pegawai aktif yang sudah memiliki bawahan atau berada pada level jabatan kepemimpinan.
+            </small>
         </div>
     </div>
 </div>

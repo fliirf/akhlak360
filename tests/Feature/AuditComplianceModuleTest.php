@@ -58,7 +58,7 @@ class AuditComplianceModuleTest extends TestCase
 
         $this->actingAs($user)
             ->post('/logout')
-            ->assertRedirect('/');
+            ->assertRedirect('/sso/login');
 
         $this->assertDatabaseHas('audit_logs', [
             'user_id' => $user->id,
@@ -105,7 +105,7 @@ class AuditComplianceModuleTest extends TestCase
             ->assertSee('50%')
             ->assertSee('Pending Users')
             ->assertSee('Assessor Employee')
-            ->assertSee('Send Reminders');
+            ->assertDontSee('Send Reminders');
 
         $this->actingAs($admin)
             ->get("/audit-compliance/compliance-monitoring?period_id={$closed->id}")
@@ -114,19 +114,24 @@ class AuditComplianceModuleTest extends TestCase
             ->assertSee('Closed Period');
     }
 
-    public function test_admin_hr_can_trigger_reminders_from_compliance_monitoring(): void
+    public function test_only_it_admin_can_trigger_reminders_from_compliance_monitoring(): void
     {
         Mail::fake();
 
         $admin = User::factory()->create(['role' => 'admin_hr']);
+        $it = User::factory()->create(['role' => 'it_admin']);
 
         $this->actingAs($admin)
+            ->post('/audit-compliance/compliance-monitoring/reminders')
+            ->assertForbidden();
+
+        $this->actingAs($it)
             ->post('/audit-compliance/compliance-monitoring/reminders')
             ->assertRedirect()
             ->assertSessionHas('success');
 
         $this->assertDatabaseHas('audit_logs', [
-            'user_id' => $admin->id,
+            'user_id' => $it->id,
             'module' => 'compliance_monitoring',
             'action' => 'generate_reminders',
         ]);

@@ -58,7 +58,7 @@ class AssessmentAssignmentController extends Controller
     {
         return view('assessment-cycle.assignments.create', [
             'assignment' => new AssessmentAssignment([
-                'assessment_period_id' => AssessmentPeriod::active()->value('id'),
+                'assessment_period_id' => AssessmentPeriod::open()->value('id'),
                 'assessor_type' => 'peer',
                 'status' => 'pending',
             ]),
@@ -75,7 +75,10 @@ class AssessmentAssignmentController extends Controller
             return back()->withInput()->withErrors($error);
         }
 
-        $assignment = AssessmentAssignment::create($data);
+        $assignment = AssessmentAssignment::create([
+            ...$data,
+            'status' => 'pending',
+        ]);
 
         $this->audit($request, 'create', "Created {$assignment->assessor_type} assignment #{$assignment->id}.");
 
@@ -113,7 +116,10 @@ class AssessmentAssignmentController extends Controller
             return back()->withInput()->withErrors($error);
         }
 
-        $assignment->update($data);
+        $assignment->update([
+            ...$data,
+            'status' => 'pending',
+        ]);
 
         $this->audit($request, 'update', "Updated {$assignment->assessor_type} assignment #{$assignment->id}.");
 
@@ -205,9 +211,6 @@ class AssessmentAssignmentController extends Controller
 
         Employee::active()
             ->whereHas('subordinates', fn (Builder $query) => $query->active())
-            ->whereHas('position', fn (Builder $query) => $query
-                ->where('name', 'like', '%Supervisor%')
-                ->orWhere('name', 'like', '%Manager%'))
             ->with(['subordinates' => fn ($query) => $query->active()])
             ->get()
             ->each(function (Employee $leader) use ($period, &$created): void {
@@ -235,7 +238,13 @@ class AssessmentAssignmentController extends Controller
     private function validatedData(Request $request, ?AssessmentAssignment $assignment = null): array
     {
         return $request->validate([
-            'assessment_period_id' => ['required', 'exists:assessment_periods,id'],
+            'assessment_period_id' => [
+                'required',
+                Rule::exists('assessment_periods', 'id')->where(fn ($query) => $query
+                    ->where('status', 'active')
+                    ->whereDate('start_date', '<=', today())
+                    ->whereDate('end_date', '>=', today())),
+            ],
             'assessor_employee_id' => [
                 'required',
                 Rule::exists('employees', 'id')->where('employment_status', 'active'),
@@ -245,7 +254,6 @@ class AssessmentAssignmentController extends Controller
                 Rule::exists('employees', 'id')->where('employment_status', 'active'),
             ],
             'assessor_type' => ['required', Rule::in(['supervisor', 'peer', 'subordinate', 'self'])],
-            'status' => ['required', Rule::in(['pending', 'submitted'])],
         ]);
     }
 
@@ -283,10 +291,10 @@ class AssessmentAssignmentController extends Controller
         ]);
 
         $period = isset($data['assessment_period_id'])
-            ? AssessmentPeriod::active()->whereKey($data['assessment_period_id'])->first()
-            : AssessmentPeriod::active()->first();
+            ? AssessmentPeriod::open()->whereKey($data['assessment_period_id'])->first()
+            : AssessmentPeriod::open()->first();
 
-        abort_if(! $period, 422, 'Select an active assessment period.');
+        abort_if(! $period, 422, 'Select an assessment period that is currently open.');
 
         return $period;
     }
@@ -294,7 +302,7 @@ class AssessmentAssignmentController extends Controller
     private function formOptions(): array
     {
         return [
-            'periods' => AssessmentPeriod::orderByDesc('year')->orderByDesc('start_date')->get(),
+            'periods' => AssessmentPeriod::open()->orderByDesc('year')->orderByDesc('start_date')->get(),
             'employees' => Employee::active()->with(['department', 'position'])->orderBy('name')->get(),
         ];
     }

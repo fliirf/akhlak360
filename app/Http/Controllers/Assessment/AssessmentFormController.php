@@ -60,9 +60,10 @@ class AssessmentFormController extends Controller
         $assignments = AssessmentAssignment::query()
             ->with(['assessmentPeriod', 'assessee.department'])
             ->where('assessor_employee_id', $employee->id)
-            ->pending()
+            ->actionable()
             ->latest()
-            ->paginate(10);
+            ->paginate(10)
+            ->withQueryString();
 
         return view('assessment.forms.pending', compact('assignments'));
     }
@@ -82,14 +83,32 @@ class AssessmentFormController extends Controller
         $selectedPeriod = isset($validated['period_id'])
             ? (int) $validated['period_id']
             : ($periods->firstWhere('status', 'active') ?? $periods->first())?->id;
-        $employeeIds = $request->user()->hasRole('supervisor')
-            ? $employee->subordinates()->pluck('id')->push($employee->id)
-            : collect([$employee->id]);
+
+        if ($request->user()->hasRole('supervisor')) {
+            $teamIds = $employee->subordinates()->pluck('id');
+            $aggregates = $selectedPeriod && $teamIds->isNotEmpty()
+                ? AssessmentAssignment::query()
+                    ->join('assessment_responses', 'assessment_responses.assessment_assignment_id', '=', 'assessment_assignments.id')
+                    ->where('assessment_assignments.assessment_period_id', $selectedPeriod)
+                    ->where('assessment_assignments.status', 'submitted')
+                    ->whereIn('assessment_assignments.assessee_employee_id', $teamIds)
+                    ->selectRaw('assessment_assignments.assessor_type, AVG(assessment_responses.score) as average_score, COUNT(DISTINCT assessment_assignments.id) as assignment_count')
+                    ->groupBy('assessment_assignments.assessor_type')
+                    ->get()
+                : collect();
+
+            return view('assessment.results.team', [
+                'periods' => $periods,
+                'selectedPeriod' => $selectedPeriod,
+                'teamCount' => $teamIds->count(),
+                'aggregates' => $aggregates,
+            ]);
+        }
 
         $results = AssessmentResult::query()
             ->with(['assessmentPeriod', 'employee.department', 'employee.idpRecommendations' => fn ($query) => $query
                 ->when($selectedPeriod, fn ($query) => $query->where('assessment_period_id', $selectedPeriod))])
-            ->whereIn('employee_id', $employeeIds)
+            ->where('employee_id', $employee->id)
             ->when($selectedPeriod, fn (Builder $query) => $query->where('assessment_period_id', $selectedPeriod))
             ->join('employees', 'employees.id', '=', 'assessment_results.employee_id')
             ->orderBy('employees.name')
@@ -101,7 +120,7 @@ class AssessmentFormController extends Controller
             'periods' => $periods,
             'selectedPeriod' => $selectedPeriod,
             'results' => $results,
-            'isSupervisor' => $request->user()->hasRole('supervisor'),
+            'isSupervisor' => false,
         ]);
     }
 
@@ -116,6 +135,11 @@ class AssessmentFormController extends Controller
         }
 
         $assignment->load(['assessmentPeriod', 'assessor', 'assessee.department']);
+        if (! $assignment->assessmentPeriod->isOpen()) {
+            return redirect()
+                ->route('assessment.pending.index')
+                ->with('warning', 'This assessment is not available because its period is not currently open.');
+        }
 
         return view('assessment.forms.show', [
             'assignment' => $assignment,
@@ -134,13 +158,33 @@ class AssessmentFormController extends Controller
                 ->with('warning', 'Duplicate submission prevented. This assessment has already been submitted.');
         }
 
+        $assignment->loadMissing('assessmentPeriod');
+        if (! $assignment->assessmentPeriod->isOpen()) {
+            return redirect()
+                ->route('assessment.pending.index')
+                ->with('warning', 'This assessment cannot be submitted because its period is not currently open.');
+        }
+
         $validated = $request->validate($this->responseRules());
 
-        DB::transaction(function () use ($request, $assignment, $validated, $resultService): void {
+        $submitted = DB::transaction(function () use ($request, $assignment, $validated, $resultService): bool {
+            $lockedAssignment = AssessmentAssignment::query()
+                ->with(['assessmentPeriod', 'assessor', 'assessee'])
+                ->lockForUpdate()
+                ->findOrFail($assignment->id);
+
+            if (
+                $lockedAssignment->status !== 'pending'
+                || $lockedAssignment->responses()->exists()
+                || ! $lockedAssignment->assessmentPeriod->isOpen()
+            ) {
+                return false;
+            }
+
             foreach (self::INDICATORS as $coreValue => $indicators) {
                 foreach ($indicators as $index => $indicator) {
                     AssessmentResponse::create([
-                        'assessment_assignment_id' => $assignment->id,
+                        'assessment_assignment_id' => $lockedAssignment->id,
                         'core_value' => $coreValue,
                         'indicator' => $indicator,
                         'score' => $validated['scores'][$coreValue][$index],
@@ -148,19 +192,19 @@ class AssessmentFormController extends Controller
                 }
             }
 
-            $assignment->update([
+            $lockedAssignment->update([
                 'status' => 'submitted',
                 'submitted_at' => now(),
             ]);
 
-            User::role('admin_hr')->get()->each(function (User $admin) use ($assignment): void {
+            User::role('admin_hr')->get()->each(function (User $admin) use ($lockedAssignment): void {
                 AppNotification::create([
                     'user_id' => $admin->id,
                     'title' => 'Assessment Submitted',
-                    'message' => "{$assignment->assessor->name} submitted {$assignment->assessor_type} assessment for {$assignment->assessee->name}.",
+                    'message' => "{$lockedAssignment->assessor->name} submitted {$lockedAssignment->assessor_type} assessment for {$lockedAssignment->assessee->name}.",
                     'type' => 'assessment_reminder',
                     'destination_url' => route('assessment-cycle.assign-assessors.index', [
-                        'assessment_period_id' => $assignment->assessment_period_id,
+                        'assessment_period_id' => $lockedAssignment->assessment_period_id,
                         'status' => 'submitted',
                     ], false),
                 ]);
@@ -170,17 +214,25 @@ class AssessmentFormController extends Controller
                 'user_id' => $request->user()?->id,
                 'action' => 'submit',
                 'module' => 'assessment_forms',
-                'description' => "Submitted assessment assignment #{$assignment->id} at ".now()->toDateTimeString().'.',
+                'description' => "Submitted assessment assignment #{$lockedAssignment->id} at ".now()->toDateTimeString().'.',
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent(),
             ]);
 
             $resultService->calculateForEmployeePeriod(
-                $assignment->assessee_employee_id,
-                $assignment->assessment_period_id,
+                $lockedAssignment->assessee_employee_id,
+                $lockedAssignment->assessment_period_id,
                 $request->user()?->id,
             );
+
+            return true;
         });
+
+        if (! $submitted) {
+            return redirect()
+                ->route('assessment.pending.index')
+                ->with('warning', 'This assessment is no longer available or has already been submitted.');
+        }
 
         return redirect()
             ->route('assessment.pending.index')

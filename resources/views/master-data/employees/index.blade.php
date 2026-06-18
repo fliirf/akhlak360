@@ -67,6 +67,7 @@
                         <th>Position</th>
                         <th>Supervisor</th>
                         <th>Status</th>
+                        <th>SSO Personal</th>
                         <th class="text-right">Actions</th>
                     </tr>
                 </thead>
@@ -84,7 +85,23 @@
                                     {{ ucfirst($employee->employment_status) }}
                                 </span>
                             </td>
+                            <td>
+                                @if ($employee->sso_code_generated_at)
+                                    <span class="badge badge-success">Ready</span>
+                                    <div class="small text-muted">{{ $employee->sso_code_generated_at->format('d M Y H:i') }}</div>
+                                @else
+                                    <span class="badge badge-warning">Belum dibuat</span>
+                                @endif
+                            </td>
                             <td class="text-right">
+                                <form method="POST" action="{{ route('master-data.employees.sso-code', $employee) }}" class="d-inline"
+                                    onsubmit="return confirm('Generate kode SSO personal baru? Kode lama akan langsung tidak berlaku.');">
+                                    @csrf
+                                    <button type="submit" class="btn btn-sm btn-info" title="Generate/Reset Kode SSO"
+                                        @disabled($employee->employment_status !== 'active')>
+                                        <i class="fas fa-key"></i>
+                                    </button>
+                                </form>
                                 <a href="{{ route('master-data.employees.edit', $employee) }}" class="btn btn-sm btn-warning">
                                     <i class="fas fa-edit"></i>
                                 </a>
@@ -100,7 +117,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="text-center text-muted">No employees found.</td>
+                            <td colspan="9" class="text-center text-muted">No employees found.</td>
                         </tr>
                     @endforelse
                 </tbody>

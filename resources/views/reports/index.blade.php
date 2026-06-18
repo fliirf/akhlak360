@@ -47,6 +47,16 @@
                     </div>
                 </div>
             </div>
+            <div class="row mt-2">
+                <div class="col-md-4">
+                    <select name="talent_category" class="form-control">
+                        <option value="">All talent categories</option>
+                        @foreach ($talentCategories as $talentCategory)
+                            <option value="{{ $talentCategory }}" @selected(request('talent_category') === $talentCategory)>{{ $talentCategory }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
             <div class="d-flex flex-wrap justify-content-between align-items-center mt-3">
                 <div>
                     <button class="btn btn-primary" type="submit">
@@ -94,7 +104,7 @@
                 </thead>
                 <tbody>
                     @forelse ($results as $result)
-                        @php($idp = $result->employee?->idpRecommendations->first())
+                        @php($idp = $result->employee?->idpRecommendations->firstWhere('assessment_period_id', $result->assessment_period_id))
                         <tr>
                             <td>{{ $result->assessmentPeriod?->name ?? '-' }}</td>
                             <td>

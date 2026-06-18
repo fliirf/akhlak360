@@ -1,5 +1,13 @@
 <?php
 
+use JeroenNoten\LaravelAdminLte\Menu\Filters\ActiveFilter;
+use JeroenNoten\LaravelAdminLte\Menu\Filters\ClassesFilter;
+use JeroenNoten\LaravelAdminLte\Menu\Filters\DataFilter;
+use JeroenNoten\LaravelAdminLte\Menu\Filters\GateFilter;
+use JeroenNoten\LaravelAdminLte\Menu\Filters\HrefFilter;
+use JeroenNoten\LaravelAdminLte\Menu\Filters\LangFilter;
+use JeroenNoten\LaravelAdminLte\Menu\Filters\SearchFilter;
+
 return [
 
     /*
@@ -259,10 +267,10 @@ return [
     'use_route_url' => true,
     'dashboard_url' => 'dashboard',
     'logout_url' => 'logout',
-    'login_url' => 'login',
-    'register_url' => 'register',
-    'password_reset_url' => 'password.request',
-    'password_email_url' => 'password.email',
+    'login_url' => 'sso.login',
+    'register_url' => null,
+    'password_reset_url' => null,
+    'password_email_url' => null,
     'profile_url' => 'profile.edit',
     'disable_darkmode_routes' => false,
 
@@ -426,9 +434,16 @@ return [
                     'icon' => 'far fa-fw fa-circle',
                 ],
                 [
-                    'text' => 'Results',
+                    'text' => 'Team Results',
                     'route' => 'assessment.results.index',
                     'icon' => 'far fa-fw fa-circle',
+                    'can' => 'view-team-results',
+                ],
+                [
+                    'text' => 'Personal Results',
+                    'route' => 'assessment.results.index',
+                    'icon' => 'far fa-fw fa-circle',
+                    'can' => 'view-personal-results',
                 ],
             ],
         ],
@@ -473,32 +488,48 @@ return [
             'active' => ['idp-talent/*'],
             'submenu' => [
                 [
+                    'text' => 'Team IDP',
+                    'route' => 'idp-talent.idp-recommendations.index',
+                    'icon' => 'far fa-fw fa-circle',
+                    'can' => 'view-team-idp',
+                ],
+                [
+                    'text' => 'Personal IDP',
+                    'route' => 'idp-talent.idp-recommendations.index',
+                    'icon' => 'far fa-fw fa-circle',
+                    'can' => 'view-personal-idp',
+                ],
+                [
                     'text' => 'IDP Recommendations',
                     'route' => 'idp-talent.idp-recommendations.index',
                     'icon' => 'far fa-fw fa-circle',
+                    'can' => 'view-report-export',
                 ],
                 [
                     'text' => 'Talent Mapping',
                     'route' => 'idp-talent.talent-mapping.index',
                     'icon' => 'far fa-fw fa-circle',
+                    'can' => 'view-report-export',
                 ],
             ],
         ],
         [
             'text' => 'Reports',
             'icon' => 'fas fa-fw fa-file-export',
-            'can' => 'view-reports',
+            'can' => 'view-report-history',
             'active' => ['reports/*'],
             'submenu' => [
                 [
                     'text' => 'Export Reports',
                     'route' => 'reports.export.index',
                     'icon' => 'far fa-fw fa-circle',
+                    'can' => 'view-report-export',
                 ],
                 [
                     'text' => 'Export History',
                     'route' => 'reports.history.index',
                     'icon' => 'far fa-fw fa-circle',
+                    'can' => 'view-report-history',
                 ],
             ],
         ],
@@ -555,13 +586,13 @@ return [
     */
 
     'filters' => [
-        JeroenNoten\LaravelAdminLte\Menu\Filters\GateFilter::class,
-        JeroenNoten\LaravelAdminLte\Menu\Filters\HrefFilter::class,
-        JeroenNoten\LaravelAdminLte\Menu\Filters\SearchFilter::class,
-        JeroenNoten\LaravelAdminLte\Menu\Filters\ActiveFilter::class,
-        JeroenNoten\LaravelAdminLte\Menu\Filters\ClassesFilter::class,
-        JeroenNoten\LaravelAdminLte\Menu\Filters\LangFilter::class,
-        JeroenNoten\LaravelAdminLte\Menu\Filters\DataFilter::class,
+        GateFilter::class,
+        HrefFilter::class,
+        SearchFilter::class,
+        ActiveFilter::class,
+        ClassesFilter::class,
+        LangFilter::class,
+        DataFilter::class,
     ],
 
     /*

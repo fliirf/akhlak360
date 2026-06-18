@@ -4,7 +4,7 @@
 
 @section('content_header')
     <h1 class="m-0">Management Dashboard</h1>
-    <p class="text-muted mb-0">Analytical overview for AKHLAK 360 results.</p>
+    <p class="text-muted mb-0">Company and unit aggregates without individual employee rankings.</p>
     @include('partials.breadcrumbs')
 @stop
 
@@ -12,129 +12,51 @@
     <x-adminlte-card title="Filters" theme="primary" icon="fas fa-filter">
         <form method="GET" action="{{ route('management.dashboard') }}">
             <div class="row">
-                <div class="col-md-5">
-                    <select name="period_id" class="form-control">
-                        <option value="">All periods</option>
-                        @foreach ($periods as $period)
-                            <option value="{{ $period->id }}" @selected((int) $selectedPeriod === $period->id)>
-                                {{ $period->name }} - {{ $period->semester }} {{ $period->year }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="col-md-5">
-                    <select name="department_id" class="form-control">
-                        <option value="">All departments</option>
-                        @foreach ($departments as $department)
-                            <option value="{{ $department->id }}" @selected((int) $selectedDepartment === $department->id)>{{ $department->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
+                <div class="col-md-3"><select name="period_id" class="form-control"><option value="">All periods</option>@foreach($periods as $period)<option value="{{ $period->id }}" @selected((int)$filters['period_id'] === $period->id)>{{ $period->name }}</option>@endforeach</select></div>
+                <div class="col-md-3"><select name="department_id" class="form-control"><option value="">All departments</option>@foreach($departments as $department)<option value="{{ $department->id }}" @selected((int)$filters['department_id'] === $department->id)>{{ $department->name }}</option>@endforeach</select></div>
+                <div class="col-md-2"><select name="category" class="form-control"><option value="">All categories</option>@foreach($categories as $category)<option value="{{ $category }}" @selected($filters['category'] === $category)>{{ $category }}</option>@endforeach</select></div>
+                <div class="col-md-2"><select name="talent_category" class="form-control"><option value="">All talent</option>@foreach($talentCategories as $category)<option value="{{ $category }}" @selected($filters['talent_category'] === $category)>{{ $category }}</option>@endforeach</select></div>
                 <div class="col-md-2">
-                    <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-search mr-1"></i> Apply</button>
+                    <button type="submit" class="btn btn-primary btn-block mb-2">Apply</button>
+                    <a href="{{ route('management.dashboard') }}" class="btn btn-outline-secondary btn-block">Reset</a>
                 </div>
             </div>
         </form>
     </x-adminlte-card>
-
     <div class="row">
-        <div class="col-lg-4 col-6"><x-adminlte-small-box title="{{ $summary['companyAverage'] !== null ? number_format($summary['companyAverage'], 2) : '-' }}" text="Rata-rata Perusahaan" icon="fas fa-star" theme="primary"/></div>
-        <div class="col-lg-4 col-6"><x-adminlte-small-box title="{{ $summary['assessedEmployees'] }}" text="Pegawai Dinilai" icon="fas fa-user-check" theme="success"/></div>
-        <div class="col-lg-4 col-12"><x-adminlte-small-box title="{{ $summary['belowThreshold'] }}" text="Di Bawah Threshold" icon="fas fa-exclamation-triangle" theme="danger"/></div>
+        <div class="col-lg-2 col-6"><x-adminlte-small-box title="{{ $summary['assessedEmployees'] }}" text="Assessed Employees" icon="fas fa-user-check" theme="primary"/></div>
+        <div class="col-lg-2 col-6"><x-adminlte-small-box title="{{ $summary['averageScore'] ?? '-' }}" text="Company Average" icon="fas fa-star" theme="info"/></div>
+        <div class="col-lg-2 col-6"><x-adminlte-small-box title="{{ $summary['completionRate'] }}%" text="Completion Rate" icon="fas fa-tasks" theme="success"/></div>
+        <div class="col-lg-2 col-6"><x-adminlte-small-box title="{{ $summary['belowThreshold'] }}" text="Below Threshold" icon="fas fa-exclamation-triangle" theme="danger"/></div>
+        <div class="col-lg-2 col-6"><x-adminlte-small-box title="{{ $summary['highPotential'] }}" text="High Potential" icon="fas fa-rocket" theme="success"/></div>
+        <div class="col-lg-2 col-6"><x-adminlte-small-box title="{{ $summary['activeIdp'] }}" text="Active IDP" icon="fas fa-lightbulb" theme="warning"/></div>
     </div>
-
     <div class="row">
-        <div class="col-lg-4 col-6"><x-adminlte-small-box title="{{ $gapSummary['averageSelf'] ?? '-' }}" text="Average Self Score" icon="fas fa-user" theme="primary"/></div>
-        <div class="col-lg-4 col-6"><x-adminlte-small-box title="{{ $gapSummary['averageOthers'] ?? '-' }}" text="Average Others Score" icon="fas fa-users" theme="info"/></div>
-        <div class="col-lg-4 col-12"><x-adminlte-small-box title="{{ $gapSummary['averageGap'] ?? '-' }}" text="Self vs Others Gap" icon="fas fa-balance-scale" theme="warning"/></div>
+        <div class="col-lg-6"><x-adminlte-card title="Company Core Value Profile" theme="primary" icon="fas fa-chart-bar">@if(array_sum($coreValueChart['data']))<canvas id="coreChart" height="140"></canvas>@else<p class="text-muted mb-0">No core value data.</p>@endif</x-adminlte-card></div>
+        <div class="col-lg-6"><x-adminlte-card title="Talent Category Distribution" theme="success" icon="fas fa-chart-pie">@if(array_sum($talentChart['data']))<canvas id="talentChart" height="140"></canvas>@else<p class="text-muted mb-0">No talent data.</p>@endif</x-adminlte-card></div>
     </div>
-
     <div class="row">
-        <div class="col-lg-6">
-            <x-adminlte-card title="Average Score per Core Value" theme="primary" icon="fas fa-chart-bar">
-                @if (array_sum($coreValueChart['data']) > 0)
-                    <canvas id="coreValueChart" height="150"></canvas>
-                @else
-                    <div class="alert alert-light mb-0">No core value data for this filter.</div>
-                @endif
-            </x-adminlte-card>
-        </div>
-        <div class="col-lg-6">
-            <x-adminlte-card title="Distribution by Department" theme="success" icon="fas fa-building">
-                @if (count($departmentChart['data']) > 0)
-                    <canvas id="departmentChart" height="150"></canvas>
-                @else
-                    <div class="alert alert-light mb-0">No department distribution data.</div>
-                @endif
-            </x-adminlte-card>
-        </div>
+        <div class="col-lg-7"><x-adminlte-card title="Semester Trend" theme="info" icon="fas fa-chart-line">@if(count($trendChart['final']))<canvas id="trendChart" height="120"></canvas>@else<p class="text-muted mb-0">No trend data.</p>@endif</x-adminlte-card></div>
+        <div class="col-lg-5"><x-adminlte-card title="Gap Distribution" theme="warning" icon="fas fa-balance-scale"><canvas id="gapChart" height="120"></canvas></x-adminlte-card></div>
     </div>
-
-    <div class="row">
-        <div class="col-lg-7">
-            <x-adminlte-card title="Semester Trend" theme="info" icon="fas fa-chart-line">
-                @if (count($trendChart['data']) > 0)
-                    <canvas id="trendChart" height="135"></canvas>
-                @else
-                    <div class="alert alert-light mb-0">No semester trend data.</div>
-                @endif
-            </x-adminlte-card>
-        </div>
-        <div class="col-lg-5">
-            <x-adminlte-card title="Talent Mapping Category Counts" theme="warning" icon="fas fa-map">
-                @if (count($talentMappingChart['data']) > 0)
-                    <canvas id="talentChart" height="135"></canvas>
-                @else
-                    <div class="alert alert-light mb-0">No talent mapping data.</div>
-                @endif
-            </x-adminlte-card>
-        </div>
-    </div>
-
-    <x-adminlte-card title="Employees Below Threshold" theme="danger" icon="fas fa-exclamation-triangle">
-        <div class="table-responsive">
-            <table class="table table-hover table-striped mb-0">
-                <thead><tr><th>Employee</th><th>Department</th><th class="text-right">Final Score</th><th>Category</th></tr></thead>
-                <tbody>
-                    @forelse ($belowThresholdEmployees as $result)
-                        <tr>
-                            <td>{{ $result->employee?->name }}</td>
-                            <td>{{ $result->employee?->department?->name ?? '-' }}</td>
-                            <td class="text-right">{{ $result->final_score }}</td>
-                            <td><span class="badge badge-danger">{{ $result->category }}</span></td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="4" class="text-center text-muted">No employees below threshold for this filter.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
+    <x-adminlte-card title="Management Attention by Department / Unit" theme="danger" icon="fas fa-building">
+        <div class="table-responsive"><table class="table table-striped mb-0"><thead><tr><th>Department</th><th class="text-right">Assessed</th><th class="text-right">Average</th><th class="text-right">Completion</th><th class="text-right">Below Threshold</th><th class="text-right">High Potential</th></tr></thead><tbody>
+            @forelse($departmentRows as $row)<tr><td>{{ $row['department']->name }}</td><td class="text-right">{{ $row['assessed'] }}</td><td class="text-right">{{ $row['average'] ?? '-' }}</td><td class="text-right">{{ $row['completion'] }}%</td><td class="text-right">{{ $row['belowThreshold'] }}</td><td class="text-right">{{ $row['highPotential'] }}</td></tr>@empty<tr><td colspan="6" class="text-center text-muted">No department aggregates.</td></tr>@endforelse
+        </tbody></table></div>
     </x-adminlte-card>
+    <x-adminlte-card title="IDP Status Summary" theme="secondary" icon="fas fa-lightbulb"><div class="row">@forelse($idpStatus as $status => $count)<div class="col-md-3"><div class="info-box"><span class="info-box-icon bg-secondary"><i class="fas fa-folder"></i></span><div class="info-box-content"><span class="info-box-text">{{ ucfirst(str_replace('_', ' ', $status)) }}</span><span class="info-box-number">{{ $count }}</span></div></div></div>@empty<div class="col-12 text-muted">No IDP status data.</div>@endforelse</div></x-adminlte-card>
 @stop
 
 @section('js')
     <script>
-        const coreValueData = {{ Illuminate\Support\Js::from($coreValueChart) }};
-        const departmentData = {{ Illuminate\Support\Js::from($departmentChart) }};
-        const trendData = {{ Illuminate\Support\Js::from($trendChart) }};
-        const talentData = {{ Illuminate\Support\Js::from($talentMappingChart) }};
-
-        const yScore = { beginAtZero: true, max: 5 };
-        if (document.getElementById('coreValueChart')) new Chart(document.getElementById('coreValueChart'), {
-            type: 'bar', data: { labels: coreValueData.labels, datasets: [{ label: 'Average Score', data: coreValueData.data, backgroundColor: '#007bff' }] },
-            options: { maintainAspectRatio: false, scales: { y: yScore } }
-        });
-        if (document.getElementById('departmentChart')) new Chart(document.getElementById('departmentChart'), {
-            type: 'bar', data: { labels: departmentData.labels, datasets: [{ label: 'Final Score', data: departmentData.data, backgroundColor: '#28a745' }] },
-            options: { maintainAspectRatio: false, scales: { y: yScore } }
-        });
-        if (document.getElementById('trendChart')) new Chart(document.getElementById('trendChart'), {
-            type: 'line', data: { labels: trendData.labels, datasets: [{ label: 'Average Final Score', data: trendData.data, borderColor: '#17a2b8', backgroundColor: 'rgba(23,162,184,.12)', fill: true }] },
-            options: { maintainAspectRatio: false, scales: { y: yScore } }
-        });
-        if (document.getElementById('talentChart')) new Chart(document.getElementById('talentChart'), {
-            type: 'doughnut', data: { labels: talentData.labels, datasets: [{ data: talentData.data, backgroundColor: ['#28a745', '#007bff', '#ffc107', '#dc3545'] }] },
-            options: { maintainAspectRatio: false }
-        });
+        const core = {{ Illuminate\Support\Js::from($coreValueChart) }};
+        const talent = {{ Illuminate\Support\Js::from($talentChart) }};
+        const trend = {{ Illuminate\Support\Js::from($trendChart) }};
+        const gap = {{ Illuminate\Support\Js::from($gapDistribution) }};
+        const scoreScale = { beginAtZero: true, max: 5 };
+        if (document.getElementById('coreChart')) new Chart(document.getElementById('coreChart'), { type: 'bar', data: { labels: core.labels, datasets: [{ label: 'Average', data: core.data }] }, options: { maintainAspectRatio: false, scales: { y: scoreScale } } });
+        if (document.getElementById('talentChart')) new Chart(document.getElementById('talentChart'), { type: 'doughnut', data: { labels: talent.labels, datasets: [{ data: talent.data }] }, options: { maintainAspectRatio: false } });
+        if (document.getElementById('trendChart')) new Chart(document.getElementById('trendChart'), { type: 'line', data: { labels: trend.labels, datasets: [{ label: 'Average Final Score', data: trend.final }] }, options: { maintainAspectRatio: false, scales: { y: scoreScale } } });
+        if (document.getElementById('gapChart')) new Chart(document.getElementById('gapChart'), { type: 'doughnut', data: { labels: gap.labels, datasets: [{ data: gap.data }] }, options: { maintainAspectRatio: false } });
     </script>
 @stop

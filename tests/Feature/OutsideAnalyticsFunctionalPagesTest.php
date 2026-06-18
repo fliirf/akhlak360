@@ -49,8 +49,9 @@ class OutsideAnalyticsFunctionalPagesTest extends TestCase
         $this->actingAs($fixture['supervisorUser'])
             ->get('/assessment/results')
             ->assertOk()
-            ->assertSee('Supervisor Result')
-            ->assertSee('Employee Result')
+            ->assertSee('Aggregated Scores by Assessor Type')
+            ->assertDontSee('Supervisor Result')
+            ->assertDontSee('Employee Result')
             ->assertDontSee('Outside Result');
     }
 
@@ -69,8 +70,9 @@ class OutsideAnalyticsFunctionalPagesTest extends TestCase
         $this->actingAs($fixture['supervisorUser'])
             ->get('/idp-talent/talent-mapping')
             ->assertOk()
-            ->assertSee('Supervisor Result')
-            ->assertSee('Employee Result')
+            ->assertSee('Team Talent Summary')
+            ->assertDontSee('Supervisor Result')
+            ->assertDontSee('Employee Result')
             ->assertDontSee('Outside Result');
 
         $this->actingAs($fixture['employeeUser'])

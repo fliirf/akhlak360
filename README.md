@@ -11,6 +11,7 @@ AKHLAK360 adalah aplikasi web berbasis Laravel untuk mengelola proses penilaian 
 * Adaptif
 * Kolaboratif
 
+<<<<<<< HEAD
 Sistem mendukung pengelolaan periode penilaian, penentuan assessor, pengisian assessment, perhitungan skor berbobot, gap analysis, Individual Development Plan, talent mapping, laporan, audit log, dan dashboard berbasis role.
 
 ---
@@ -39,6 +40,33 @@ Bobot penilaian default:
 ## Fitur Utama
 
 ### Autentikasi
+=======
+- PHP 8.2+
+- Laravel 12
+- Company SSO simulation authentication
+- Laravel Blade
+- AdminLTE
+- Chart.js
+- MySQL/MariaDB atau SQLite
+- PHPUnit feature tests
+
+## Fitur Utama
+
+- Authentication dan role-based access control.
+- Company SSO Simulation sebagai satu-satunya autentikasi publik.
+- Master data department, position, employee, dan HRIS CSV import.
+- Konfigurasi periode penilaian dan bobot assessor.
+- Workflow peer approval oleh supervisor.
+- Assignment penilai: self, supervisor, peer, subordinate.
+- Form penilaian 360 dengan 6 Core Values AKHLAK dan 18 indikator.
+- Kalkulasi skor otomatis dengan normalisasi bobot.
+- Dashboard Admin HR, Management, Supervisor, Employee, dan IT Admin.
+- Analytics: Core Value Dashboard, Gap Analysis, Department Distribution, Semester Trend, Below Threshold.
+- IDP recommendation dan Talent Mapping.
+- Export laporan CSV, dengan fallback Excel/PDF bila package belum tersedia.
+- In-app notification dan email-log reminder simulation.
+- Audit logs dan compliance monitoring.
+>>>>>>> 21a4434 (Update fitur dan dokumentasi AKHLAK360)
 
 * Company SSO Simulation
 * Login menggunakan email perusahaan atau nomor karyawan
@@ -54,6 +82,7 @@ Bobot penilaian default:
 
 ### HRIS Simulation
 
+<<<<<<< HEAD
 * Import data employee melalui CSV
 * Download template CSV
 * Sinkronisasi employee
@@ -258,6 +287,21 @@ Extension PHP yang dibutuhkan:
 * ZIP
 
 ---
+=======
+## Identitas Demo SSO
+
+Setiap karyawan menggunakan kode SSO personal. Role tidak dipilih pengguna dan selalu dihitung ulang dari data HRIS serta konfigurasi.
+
+| Email / Nomor Pegawai | Kode SSO Personal | Role |
+| --- | --- | --- |
+| `admin_hr@example.com` / `EMP001` | `AKH-HR01-2026` | Admin HR |
+| `management@example.com` / `EMP002` | `AKH-MGT2-2026` | Management |
+| `it@example.com` / `EMP003` | `AKH-IT03-2026` | IT Admin |
+| `supervisor@example.com` / `EN-0003` | `AKH-SPV3-2026` | Supervisor |
+| `employee@example.com` / `EN-0005` | `AKH-EMP5-2026` | Employee |
+
+Password acak atau password akun seed hanya menjadi atribut teknis database dan tidak dapat digunakan pada autentikasi publik.
+>>>>>>> 21a4434 (Update fitur dan dokumentasi AKHLAK360)
 
 ## Instalasi
 
@@ -339,10 +383,29 @@ php artisan serve
 Aplikasi dapat diakses melalui:
 
 ```text
+<<<<<<< HEAD
 http://127.0.0.1:8000
 ```
 
 ---
+=======
+http://127.0.0.1:8000/sso/login
+```
+
+Route `/` dan `/login` mengarahkan guest ke `/sso/login`. Form login password dan pemulihan password tidak tersedia untuk publik.
+
+Tambahkan konfigurasi berikut ke `.env`:
+
+```env
+ADMIN_HR_EMPLOYEE_NUMBERS=EMP001
+MANAGEMENT_EMPLOYEE_NUMBERS=EMP002
+IT_ADMIN_EMPLOYEE_NUMBERS=EMP003
+```
+
+Role dihitung ulang pada setiap login berdasarkan daftar Admin HR, Management, IT Admin, keberadaan bawahan langsung, lalu fallback Employee. Identitas harus cocok dengan pegawai HRIS aktif dan kode personal yang tersimpan dalam bentuk hash. Pegawai tanpa user dibuatkan user otomatis; pegawai tanpa email memakai alamat unik `nomorpegawai@internal.akhlak360.invalid`.
+
+Admin HR dapat membuat atau mereset kode melalui **Master Data → Employees → tombol kunci**. Kode baru ditampilkan satu kali dan kode lama langsung tidak berlaku. Karyawan yang dibuat melalui form manual langsung memperoleh kode awal. Karyawan hasil import HRIS harus dibuatkan kode oleh Admin HR setelah import.
+>>>>>>> 21a4434 (Update fitur dan dokumentasi AKHLAK360)
 
 ## Konfigurasi SSO Simulation
 
@@ -446,8 +509,23 @@ php artisan migrate:fresh --seed
 
 Jalankan seluruh test:
 
+<<<<<<< HEAD
 ```bash
 php artisan test
+=======
+- SSO bersifat simulasi akademik dengan kode personal per karyawan. Implementasi produksi tetap membutuhkan identity provider perusahaan.
+- HRIS integration disimulasikan melalui CSV import dan sync log.
+- Email reminder dapat menggunakan Laravel log driver atau Mailtrap.
+- Real-time dashboard menggunakan data database terbaru dan optional refresh, bukan websocket.
+- Payroll, remuneration, dan mobile app tidak termasuk scope aplikasi ini.
+
+## Testing Status
+
+Test suite terakhir:
+
+```text
+86 passed (493 assertions)
+>>>>>>> 21a4434 (Update fitur dan dokumentasi AKHLAK360)
 ```
 
 Lihat daftar route:

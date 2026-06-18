@@ -6,6 +6,7 @@ use App\Mail\AssessmentReminderMail;
 use App\Models\AppNotification;
 use App\Models\AssessmentAssignment;
 use App\Models\AssessmentPeriod;
+use App\Models\AuditLog;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\User;
@@ -58,6 +59,54 @@ class NotificationEngineTest extends TestCase
 
         $this->assertDatabaseCount('notifications', 0);
         Mail::assertNothingSent();
+    }
+
+    public function test_email_only_reminders_are_deduplicated_and_disabled_channels_are_not_counted(): void
+    {
+        Mail::fake();
+        config([
+            'akhlak360.in_app_notifications_enabled' => false,
+            'akhlak360.email_notifications_enabled' => true,
+        ]);
+        $this->assessmentFixture(now()->subDays(3)->toDateString());
+
+        $this->artisan('assessment:send-reminders')
+            ->expectsOutput('Generated 1 reminders. Skipped 0 assignments.')
+            ->assertExitCode(0);
+        $this->artisan('assessment:send-reminders')
+            ->expectsOutput('Generated 0 reminders. Skipped 1 assignments.')
+            ->assertExitCode(0);
+
+        Mail::assertSent(AssessmentReminderMail::class, 1);
+        $this->assertDatabaseCount('notifications', 0);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'assessment_reminder_sent',
+            'module' => 'notifications',
+        ]);
+
+        config([
+            'akhlak360.in_app_notifications_enabled' => false,
+            'akhlak360.email_notifications_enabled' => false,
+        ]);
+        AuditLog::where('action', 'assessment_reminder_sent')->delete();
+
+        $this->artisan('assessment:send-reminders')
+            ->expectsOutput('Generated 0 reminders. Skipped 1 assignments.')
+            ->assertExitCode(0);
+    }
+
+    public function test_inactive_assessors_do_not_receive_reminders(): void
+    {
+        Mail::fake();
+        $fixture = $this->assessmentFixture(now()->subDays(3)->toDateString());
+        $fixture['assessor']->update(['employment_status' => 'inactive']);
+
+        $this->artisan('assessment:send-reminders')
+            ->expectsOutput('Generated 0 reminders. Skipped 0 assignments.')
+            ->assertExitCode(0);
+
+        Mail::assertNothingSent();
+        $this->assertDatabaseCount('notifications', 0);
     }
 
     public function test_user_can_view_and_mark_notifications_as_read(): void

@@ -28,7 +28,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     if (! auth()->check()) {
-        return redirect('/login');
+        return redirect('/sso/login');
     }
 
     return redirect(match (auth()->user()->role) {
@@ -40,8 +40,15 @@ Route::get('/', function () {
     });
 });
 
-Route::get('/sso/simulation', [SsoSimulationController::class, 'show'])
+Route::get('/sso/login', [SsoSimulationController::class, 'show'])
     ->middleware('guest')
+    ->name('sso.login');
+
+Route::post('/sso/login', [SsoSimulationController::class, 'store'])
+    ->middleware('guest')
+    ->name('sso.authenticate');
+
+Route::get('/sso/simulation', fn () => redirect('/sso/login'))
     ->name('sso.simulation');
 
 Route::get('/dashboard', function () {
@@ -52,9 +59,9 @@ Route::get('/dashboard', function () {
         'it_admin' => '/it/dashboard',
         default => '/employee/dashboard',
     });
-})->middleware(['auth', 'verified'])->name('dashboard');
+})->middleware(['auth', 'active.employee', 'verified'])->name('dashboard');
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', 'active.employee', 'verified'])->group(function () {
     Route::get('/admin/dashboard', [DashboardController::class, 'adminHr'])
         ->middleware('role:admin_hr')
         ->name('admin.dashboard');
@@ -106,6 +113,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     Route::middleware('role:admin_hr')->prefix('master-data')->name('master-data.')->group(function () {
+        Route::post('/employees/{employee}/sso-code', [EmployeeController::class, 'generateSsoCode'])->name('employees.sso-code');
         Route::resource('departments', DepartmentController::class)->except('show');
         Route::resource('positions', PositionController::class)->except('show');
         Route::resource('employees', EmployeeController::class)->except('show');
@@ -113,6 +121,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::middleware('role:admin_hr,it_admin')->prefix('master-data')->name('master-data.')->group(function () {
         Route::get('/hris-sync', [HrisSyncController::class, 'index'])->name('hris-sync.index');
+    });
+
+    Route::middleware('role:admin_hr')->prefix('master-data')->name('master-data.')->group(function () {
         Route::get('/hris-sync/sample', [HrisSyncController::class, 'sample'])->name('hris-sync.sample');
         Route::post('/hris-sync/import', [HrisSyncController::class, 'import'])->name('hris-sync.import');
         Route::post('/hris-sync/manual', [HrisSyncController::class, 'manualSync'])->name('hris-sync.manual');
@@ -154,7 +165,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/core-value-dashboard', [CoreValueDashboardController::class, 'index'])->name('core-values.index');
     });
 
-    Route::middleware('role:admin_hr,supervisor,management')->prefix('analytics')->name('analytics.')->group(function () {
+    Route::middleware('role:admin_hr,management')->prefix('analytics')->name('analytics.')->group(function () {
         Route::get('/gap-analysis', [GapAnalysisController::class, 'index'])->name('gap-analysis.index');
         Route::get('/department-distribution', [DepartmentDistributionController::class, 'index'])->name('department-distribution.index');
         Route::get('/semester-trend', [SemesterTrendController::class, 'index'])->name('semester-trend.index');
@@ -174,6 +185,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/export/csv', [ReportController::class, 'csv'])->name('export.csv');
         Route::get('/export/excel', [ReportController::class, 'excel'])->name('export.excel');
         Route::get('/export/pdf', [ReportController::class, 'pdf'])->name('export.pdf');
+    });
+
+    Route::middleware('role:admin_hr,management,it_admin')->prefix('reports')->name('reports.')->group(function () {
         Route::get('/history', [ReportController::class, 'history'])->name('history.index');
     });
 
@@ -184,12 +198,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.mark-read');
     });
 
-    Route::middleware('role:it_admin')->prefix('audit-compliance')->name('audit-compliance.')->group(function () {
+    Route::middleware('role:admin_hr,it_admin')->prefix('audit-compliance')->name('audit-compliance.')->group(function () {
         Route::get('/audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
+        Route::get('/compliance-monitoring', [ComplianceMonitoringController::class, 'index'])->name('compliance-monitoring.index');
     });
 
-    Route::middleware('role:admin_hr,it_admin')->prefix('audit-compliance')->name('audit-compliance.')->group(function () {
-        Route::get('/compliance-monitoring', [ComplianceMonitoringController::class, 'index'])->name('compliance-monitoring.index');
+    Route::middleware('role:it_admin')->prefix('audit-compliance')->name('audit-compliance.')->group(function () {
         Route::post('/compliance-monitoring/reminders', [ComplianceMonitoringController::class, 'sendReminders'])->name('compliance-monitoring.reminders');
     });
 
@@ -198,10 +212,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 });
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'active.employee'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
 require __DIR__.'/auth.php';

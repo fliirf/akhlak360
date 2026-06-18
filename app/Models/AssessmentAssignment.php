@@ -58,6 +58,14 @@ class AssessmentAssignment extends Model
         return $query->where('status', 'submitted');
     }
 
+    public function scopeActionable(Builder $query): Builder
+    {
+        return $query->pending()->whereHas(
+            'assessmentPeriod',
+            fn (Builder $periodQuery) => $periodQuery->open()
+        );
+    }
+
     public function scopeAssessorType(Builder $query, string $type): Builder
     {
         return $query->where('assessor_type', $type);

@@ -5,9 +5,11 @@ namespace Tests\Feature;
 use App\Models\AssessmentAssignment;
 use App\Models\AssessmentPeriod;
 use App\Models\AssessmentResponse;
+use App\Models\AssessmentResult;
 use App\Models\AssessmentWeight;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\IdpRecommendation;
 use App\Models\User;
 use App\Services\AssessmentResultService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -128,6 +130,54 @@ class AssessmentResultServiceTest extends TestCase
             'user_id' => $fixture['admin']->id,
             'module' => 'assessment_periods',
             'action' => 'recalculate_results',
+        ]);
+    }
+
+    public function test_recalculation_rejects_incomplete_submissions_and_removes_stale_derived_data(): void
+    {
+        $fixture = $this->fixture();
+        $assignment = AssessmentAssignment::create([
+            'assessment_period_id' => $fixture['period']->id,
+            'assessor_employee_id' => $fixture['self']->id,
+            'assessee_employee_id' => $fixture['assessee']->id,
+            'assessor_type' => 'self',
+            'status' => 'submitted',
+            'submitted_at' => now(),
+        ]);
+        AssessmentResponse::create([
+            'assessment_assignment_id' => $assignment->id,
+            'core_value' => 'Amanah',
+            'indicator' => 'Incomplete legacy response',
+            'score' => 5,
+        ]);
+        AssessmentResult::create([
+            'assessment_period_id' => $fixture['period']->id,
+            'employee_id' => $fixture['assessee']->id,
+            'final_score' => 5,
+            'category' => 'Sangat Baik',
+        ]);
+        IdpRecommendation::create([
+            'assessment_period_id' => $fixture['period']->id,
+            'employee_id' => $fixture['assessee']->id,
+            'weakest_core_value' => 'Amanah',
+            'recommendation' => 'Stale recommendation',
+            'status' => 'draft',
+        ]);
+
+        $result = app(AssessmentResultService::class)->calculateForEmployeePeriod(
+            $fixture['assessee']->id,
+            $fixture['period']->id,
+            $fixture['admin']->id,
+        );
+
+        $this->assertNull($result);
+        $this->assertDatabaseMissing('assessment_results', [
+            'assessment_period_id' => $fixture['period']->id,
+            'employee_id' => $fixture['assessee']->id,
+        ]);
+        $this->assertDatabaseMissing('idp_recommendations', [
+            'assessment_period_id' => $fixture['period']->id,
+            'employee_id' => $fixture['assessee']->id,
         ]);
     }
 

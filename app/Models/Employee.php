@@ -22,12 +22,19 @@ class Employee extends Model
         'supervisor_id',
         'employment_status',
         'hris_external_id',
+        'sso_code_hash',
+        'sso_code_generated_at',
         'last_synced_at',
+    ];
+
+    protected $hidden = [
+        'sso_code_hash',
     ];
 
     protected function casts(): array
     {
         return [
+            'sso_code_generated_at' => 'datetime',
             'last_synced_at' => 'datetime',
         ];
     }
@@ -97,6 +104,28 @@ class Employee extends Model
         return $query->where('employment_status', 'inactive');
     }
 
+    public function scopeSupervisorCandidates(Builder $query): Builder
+    {
+        $leadershipLevels = config('akhlak360.supervisor_candidate_position_levels', ['L3', 'L4', 'L5']);
+
+        return $query->where(function (Builder $candidateQuery) use ($leadershipLevels): void {
+            $candidateQuery->whereHas('subordinates')
+                ->orWhereHas('position', fn (Builder $positionQuery) => $positionQuery
+                    ->whereIn('level', $leadershipLevels));
+        });
+    }
+
+    public function isSupervisorCandidate(): bool
+    {
+        return $this->subordinates()->exists()
+            || ($this->position
+                && in_array(
+                    $this->position->level,
+                    config('akhlak360.supervisor_candidate_position_levels', ['L3', 'L4', 'L5']),
+                    true
+                ));
+    }
+
     public function scopeInDepartment(Builder $query, int $departmentId): Builder
     {
         return $query->where('department_id', $departmentId);
@@ -104,9 +133,11 @@ class Employee extends Model
 
     public function scopeSearch(Builder $query, ?string $term): Builder
     {
-        return $query->when($term, fn (Builder $query) => $query
-            ->where('name', 'like', "%{$term}%")
-            ->orWhere('employee_number', 'like', "%{$term}%")
-            ->orWhere('email', 'like', "%{$term}%"));
+        return $query->when($term, fn (Builder $query) => $query->where(
+            fn (Builder $searchQuery) => $searchQuery
+                ->where('name', 'like', "%{$term}%")
+                ->orWhere('employee_number', 'like', "%{$term}%")
+                ->orWhere('email', 'like', "%{$term}%")
+        ));
     }
 }

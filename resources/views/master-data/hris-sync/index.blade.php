@@ -8,6 +8,7 @@
             <h1 class="m-0">HRIS Sync</h1>
             <p class="text-muted mb-0">Simulated HRIS CSV import and manual synchronization log.</p>
         </div>
+        @can('manage-hris-sync')
         <div class="mt-3 mt-md-0">
             <a href="{{ route('master-data.hris-sync.sample') }}" class="btn btn-outline-success">
                 <i class="fas fa-download mr-1"></i> Sample CSV
@@ -19,6 +20,7 @@
                 </button>
             </form>
         </div>
+        @endcan
     </div>
     @include('partials.breadcrumbs')
 @stop
@@ -32,6 +34,11 @@
         <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $summary['failed'] }}" text="Gagal" icon="fas fa-times-circle" theme="danger"/></div>
         <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $summary['latest']?->format('d M H:i') ?? '-' }}" text="Sinkronisasi Terakhir" icon="fas fa-clock" theme="info"/></div>
     </div>
+    @cannot('manage-hris-sync')
+        <div class="alert alert-info">
+            IT Admin access is monitoring-only. CSV import and manual HRIS synchronization are restricted to Admin HR.
+        </div>
+    @endcannot
 
     <x-adminlte-card title="Filter Sync History" theme="secondary" icon="fas fa-filter">
         <form method="GET" action="{{ route('master-data.hris-sync.index') }}">
@@ -59,6 +66,7 @@
         </form>
     </x-adminlte-card>
 
+    @can('manage-hris-sync')
     <div class="row">
         <div class="col-lg-5">
             <x-adminlte-card title="Import Employee CSV" theme="primary" icon="fas fa-file-csv">
@@ -83,6 +91,7 @@
             </x-adminlte-card>
         </div>
     </div>
+    @endcan
 
     <x-adminlte-card title="Sync Logs" theme="success" icon="fas fa-history">
         <div class="table-responsive">

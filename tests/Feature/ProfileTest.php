@@ -10,90 +10,43 @@ class ProfileTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_profile_page_is_displayed(): void
+    public function test_profile_page_displays_read_only_sso_identity(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create([
+            'role' => 'employee',
+            'sso_provider' => 'simulated_personal_sso',
+            'sso_id' => 'employee:TEST001',
+        ]);
 
-        $response = $this
-            ->actingAs($user)
-            ->get('/profile');
-
-        $response->assertOk();
+        $this->actingAs($user)
+            ->get('/profile')
+            ->assertOk()
+            ->assertSee('Identitas SSO')
+            ->assertSee('bersumber dari HRIS')
+            ->assertSee('simulated_personal_sso')
+            ->assertDontSee('Ubah Password')
+            ->assertDontSee('Hapus Akun');
     }
 
-    public function test_profile_information_can_be_updated(): void
+    public function test_profile_identity_mutation_and_account_deletion_are_unavailable(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create([
+            'name' => 'Original Name',
+            'email' => 'original@example.com',
+        ]);
 
-        $response = $this
-            ->actingAs($user)
-            ->patch('/profile', [
-                'name' => 'Test User',
-                'email' => 'test@example.com',
-            ]);
+        $this->actingAs($user)->patch('/profile', [
+            'name' => 'Changed Name',
+            'email' => 'changed@example.com',
+        ])->assertMethodNotAllowed();
 
-        $response
-            ->assertSessionHasNoErrors()
-            ->assertRedirect('/profile');
+        $this->actingAs($user)->delete('/profile', [
+            'password' => 'password',
+        ])->assertMethodNotAllowed();
 
         $user->refresh();
-
-        $this->assertSame('Test User', $user->name);
-        $this->assertSame('test@example.com', $user->email);
-        $this->assertNull($user->email_verified_at);
-    }
-
-    public function test_email_verification_status_is_unchanged_when_the_email_address_is_unchanged(): void
-    {
-        $user = User::factory()->create();
-
-        $response = $this
-            ->actingAs($user)
-            ->patch('/profile', [
-                'name' => 'Test User',
-                'email' => $user->email,
-            ]);
-
-        $response
-            ->assertSessionHasNoErrors()
-            ->assertRedirect('/profile');
-
-        $this->assertNotNull($user->refresh()->email_verified_at);
-    }
-
-    public function test_user_can_delete_their_account(): void
-    {
-        $user = User::factory()->create();
-
-        $response = $this
-            ->actingAs($user)
-            ->delete('/profile', [
-                'password' => 'password',
-            ]);
-
-        $response
-            ->assertSessionHasNoErrors()
-            ->assertRedirect('/');
-
-        $this->assertGuest();
-        $this->assertNull($user->fresh());
-    }
-
-    public function test_correct_password_must_be_provided_to_delete_account(): void
-    {
-        $user = User::factory()->create();
-
-        $response = $this
-            ->actingAs($user)
-            ->from('/profile')
-            ->delete('/profile', [
-                'password' => 'wrong-password',
-            ]);
-
-        $response
-            ->assertSessionHasErrorsIn('userDeletion', 'password')
-            ->assertRedirect('/profile');
-
-        $this->assertNotNull($user->fresh());
+        $this->assertSame('Original Name', $user->name);
+        $this->assertSame('original@example.com', $user->email);
+        $this->assertDatabaseHas('users', ['id' => $user->id]);
     }
 }
