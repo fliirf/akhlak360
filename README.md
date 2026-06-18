@@ -1,247 +1,643 @@
 # AKHLAK360
 
-**Sistem Penilaian 360 Derajat Core Values AKHLAK PT Energi Nusantara** adalah aplikasi web MVP berbasis Laravel Blade dan AdminLTE untuk mensimulasikan proses penilaian 360 derajat, analitik nilai inti AKHLAK, rekomendasi IDP, talent mapping, laporan, notifikasi, dan audit kepatuhan.
+Sistem Penilaian 360° Core Values AKHLAK PT Energi Nusantara
 
-Project ini dibuat sebagai aplikasi demo akademik/proposal. Integrasi SSO, HRIS, email, dan ekspor laporan disediakan dalam bentuk simulasi yang tetap mengikuti alur kerja aplikasi enterprise.
+AKHLAK360 adalah aplikasi web berbasis Laravel untuk mengelola proses penilaian karyawan secara 360 derajat berdasarkan enam Core Values AKHLAK:
 
-## Tech Stack
+* Amanah
+* Kompeten
+* Harmonis
+* Loyal
+* Adaptif
+* Kolaboratif
 
-- PHP 8.2+
-- Laravel 12
-- Laravel Breeze authentication
-- Laravel Blade
-- AdminLTE
-- Chart.js
-- MySQL/MariaDB atau SQLite
-- PHPUnit feature tests
+Sistem mendukung pengelolaan periode penilaian, penentuan assessor, pengisian assessment, perhitungan skor berbobot, gap analysis, Individual Development Plan, talent mapping, laporan, audit log, dan dashboard berbasis role.
+
+---
+
+## Tujuan Sistem
+
+Aplikasi ini dibuat sebagai MVP akademik untuk membantu perusahaan menjalankan proses penilaian karyawan secara terstruktur melalui beberapa perspektif:
+
+* Atasan
+* Rekan sejawat
+* Bawahan
+* Diri sendiri
+
+Bobot penilaian default:
+
+| Jenis Penilai | Bobot |
+| ------------- | ----: |
+| Supervisor    |   40% |
+| Peer          |   20% |
+| Subordinate   |   30% |
+| Self          |   10% |
+| Total         |  100% |
+
+---
 
 ## Fitur Utama
 
-- Authentication dan role-based access control.
-- Simulasi Company SSO dengan fallback login email/password.
-- Master data department, position, employee, dan HRIS CSV import.
-- Konfigurasi periode penilaian dan bobot assessor.
-- Workflow peer approval oleh supervisor.
-- Assignment penilai: self, supervisor, peer, subordinate.
-- Form penilaian 360 dengan 6 Core Values AKHLAK dan 18 indikator.
-- Kalkulasi skor otomatis dengan normalisasi bobot.
-- Dashboard Admin HR, Management, Supervisor, Employee, dan IT Admin.
-- Analytics: Core Value Dashboard, Gap Analysis, Department Distribution, Semester Trend, Below Threshold.
-- IDP recommendation dan Talent Mapping.
-- Export laporan CSV, dengan fallback Excel/PDF bila package belum tersedia.
-- In-app notification dan email-log reminder simulation.
-- Audit logs dan compliance monitoring.
+### Autentikasi
 
-## Role Aplikasi
+* Company SSO Simulation
+* Login menggunakan email perusahaan atau nomor karyawan
+* Auto-provisioning akun internal
+* Role ditentukan otomatis
+* Rate limiting
+* Session regeneration
+* Audit login
+* Penolakan akses employee tidak aktif
+* Tidak tersedia public register
+* Tidak tersedia public password login
+* Tidak tersedia forgot/reset password
 
-| Role | Akses Utama |
-| --- | --- |
-| `admin_hr` | Master data, periode, assignment, IDP, reports, analytics |
-| `supervisor` | Peer approval, assessment, dashboard tim |
-| `employee` | Assessment, dashboard pribadi, hasil dan IDP pribadi |
-| `management` | Analytics organisasi, reports, IDP summary |
-| `it_admin` | HRIS sync logs, audit logs, system settings |
+### HRIS Simulation
 
-## Akun Demo
+* Import data employee melalui CSV
+* Download template CSV
+* Sinkronisasi employee
+* Sinkronisasi department dan position
+* Supervisor mapping
+* Status aktif dan nonaktif
+* Riwayat sinkronisasi
+* Audit log proses import
 
-Semua akun demo menggunakan password:
+### Assessment Cycle
 
-```text
-password
-```
+* Periode penilaian setiap semester
+* Durasi periode hingga 14 hari
+* Threshold penilaian
+* Bobot assessor per periode
+* Aktivasi dan penutupan periode
+* Monitoring progress assessment
 
-| Email | Role |
-| --- | --- |
-| `admin_hr@example.com` | Admin HR |
-| `supervisor@example.com` | Supervisor |
-| `employee@example.com` | Employee |
-| `management@example.com` | Management |
-| `it@example.com` | IT Admin |
+### Penentuan Assessor
+
+* Self assessment
+* Supervisor assessment
+* Peer assessment
+* Subordinate assessment
+* Peer proposal oleh Admin HR
+* Persetujuan peer oleh Supervisor
+* Pencegahan assignment duplikat
+
+### Form Penilaian
+
+* Enam Core Values AKHLAK
+* Total 18 indikator
+* Skala Likert 1–5
+* Validasi seluruh indikator
+* Pencegahan submit ulang
+* Timestamp submission
+* Audit trail
+
+### Kalkulasi Hasil
+
+* Rata-rata per jenis assessor
+* Normalisasi bobot jika jenis assessor tidak tersedia
+* Skor setiap Core Value
+* Final score
+* Self score
+* Others score
+* Gap analysis
+* Threshold analysis
+* Weakest Core Value
+* IDP recommendation
+* Talent mapping
+* Recalculation idempotent
+
+### Dashboard
+
+Dashboard tersedia untuk:
+
+* Admin HR
+* Supervisor
+* Employee
+* Management
+* IT Admin
+
+Setiap dashboard menampilkan informasi dan fungsi sesuai kewenangan masing-masing role.
+
+### Reports
+
+* Filter periode
+* Filter department
+* Filter kategori
+* Filter threshold
+* Filter talent category
+* Export CSV
+* Export XLSX
+* Export PDF
+* Export history
+* Audit log export
+
+### Audit dan Compliance
+
+* Audit login
+* Audit assessment
+* Audit assignment
+* Audit peer approval
+* Audit result calculation
+* Audit HRIS sync
+* Audit export
+* Compliance monitoring
+* Read-only technical monitoring
+
+---
+
+## Role dan Hak Akses
+
+### Admin HR
+
+Admin HR mengelola operasional utama sistem:
+
+* Employee
+* Department
+* Position
+* HRIS import
+* Assessment period
+* Assessment weights
+* Peer proposal
+* Assignment
+* Result calculation
+* Notification
+* Reports
+* Audit
+* Compliance
+
+### Supervisor
+
+Supervisor dapat:
+
+* Melihat direct reports
+* Menyetujui atau menolak peer
+* Mengisi assessment bawahan
+* Melihat progress tim
+* Melihat hasil agregat tim
+* Melihat IDP bawahan langsung
+
+### Employee
+
+Employee dapat:
+
+* Melihat task assessment
+* Mengisi self assessment
+* Mengisi peer assessment
+* Mengisi subordinate assessment
+* Melihat hasil pribadi
+* Melihat gap analysis pribadi
+* Melihat IDP pribadi
+* Melihat profile HRIS
+
+### Management
+
+Management dapat:
+
+* Melihat company analytics
+* Melihat distribusi skor department
+* Melihat semester trend
+* Melihat gap analysis agregat
+* Melihat talent mapping
+* Melihat IDP summary
+* Mengakses reports
+
+Management tidak memiliki akses terhadap fungsi operasional HR.
+
+### IT Admin
+
+IT Admin dapat:
+
+* Monitoring HRIS sync
+* Monitoring audit log
+* Monitoring export history
+* Melihat system configuration
+* Melihat compliance status
+* Melihat environment information
+
+IT Admin tidak memiliki akses terhadap hasil penilaian individual yang bersifat rahasia.
+
+---
+
+## Teknologi
+
+* PHP 8.2+
+* Laravel 12
+* Blade
+* AdminLTE
+* SQLite
+* Vite
+* Chart.js
+* Laravel Session Authentication
+* PHPUnit
+
+---
+
+## Kebutuhan Sistem
+
+Pastikan sudah tersedia:
+
+* PHP 8.2 atau lebih baru
+* Composer
+* Node.js
+* npm
+* Git
+
+Extension PHP yang dibutuhkan:
+
+* OpenSSL
+* PDO
+* Mbstring
+* Tokenizer
+* XML
+* Ctype
+* JSON
+* BCMath
+* Fileinfo
+* SQLite
+* ZIP
+
+---
 
 ## Instalasi
 
-### 1. Clone repository
+Clone repository:
 
 ```bash
-git clone https://github.com/fliirf/akhlak360.git
+git clone <repository-url>
 cd akhlak360
 ```
 
-### 2. Install dependency PHP
+Install dependency PHP:
 
 ```bash
 composer install
 ```
 
-### 3. Install dependency frontend
+Install dependency frontend:
 
 ```bash
 npm install
 ```
 
-### 4. Buat file environment
+Buat file environment:
+
+```bash
+copy .env.example .env
+```
+
+Untuk Linux atau macOS:
 
 ```bash
 cp .env.example .env
-php artisan key:generate
 ```
 
-Untuk PowerShell Windows, gunakan:
-
-```powershell
-Copy-Item .env.example .env
-php artisan key:generate
-```
-
-### 5. Konfigurasi database
-
-Edit file `.env` sesuai database lokal.
-
-Contoh MySQL/MariaDB:
-
-```env
-DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=akhlak360
-DB_USERNAME=root
-DB_PASSWORD=
-```
-
-Pastikan database `akhlak360` sudah dibuat sebelum migrasi.
-
-Alternatif SQLite:
-
-```env
-DB_CONNECTION=sqlite
-```
-
-Lalu buat file database:
+Generate application key:
 
 ```bash
-touch database/database.sqlite
+php artisan key:generate
 ```
 
-Untuk PowerShell Windows:
+Buat file database SQLite:
+
+Windows PowerShell:
 
 ```powershell
 New-Item database/database.sqlite -ItemType File
 ```
 
-### 6. Jalankan migrasi dan seeder demo
+Linux atau macOS:
+
+```bash
+touch database/database.sqlite
+```
+
+Pastikan konfigurasi database di `.env`:
+
+```env
+DB_CONNECTION=sqlite
+```
+
+Jalankan migration dan seeder:
 
 ```bash
 php artisan migrate:fresh --seed
 ```
 
-Seeder akan membuat data demo: user, department, position, 20 employee, active assessment period, assignments, responses, results, notifications, audit logs, IDP, dan HRIS sync logs.
-
-### 7. Build asset frontend
-
-Untuk development:
-
-```bash
-npm run dev
-```
-
-Untuk build production:
+Build asset:
 
 ```bash
 npm run build
 ```
 
-### 8. Jalankan aplikasi
+Jalankan aplikasi:
 
 ```bash
 php artisan serve
 ```
 
-Buka aplikasi di:
+Aplikasi dapat diakses melalui:
 
 ```text
-http://127.0.0.1:8000/login
+http://127.0.0.1:8000
 ```
 
-Route `/` otomatis mengarahkan guest ke `/login` dan user yang sudah login ke dashboard sesuai role.
+---
 
-## Perintah Penting
+## Konfigurasi SSO Simulation
 
-Menjalankan test:
+Tambahkan konfigurasi berikut pada `.env`:
 
-```bash
-php artisan test
+```env
+ADMIN_HR_EMPLOYEE_NUMBERS=EMP001
+MANAGEMENT_EMPLOYEE_NUMBERS=EMP002
+IT_ADMIN_EMPLOYEE_NUMBERS=EMP003
 ```
 
-Menjalankan reminder assessment manual:
+SSO Simulation menggunakan kode individual yang disimpan dalam bentuk hash pada employee record.
 
-```bash
-php artisan assessment:send-reminders
+Public password login tidak dapat digunakan.
+
+---
+
+## Akun Demo
+
+| Role       | Employee Number | Email                                                   | SSO Code      |
+| ---------- | --------------- | ------------------------------------------------------- | ------------- |
+| Admin HR   | EMP001          | [admin_hr@example.com](mailto:admin_hr@example.com)     | AKH-HR01-2026 |
+| Supervisor | EN-0003         | [supervisor@example.com](mailto:supervisor@example.com) | AKH-SPV3-2026 |
+| Employee   | EN-0005         | [employee@example.com](mailto:employee@example.com)     | AKH-EMP5-2026 |
+| Management | EMP002          | [management@example.com](mailto:management@example.com) | AKH-MGT2-2026 |
+| IT Admin   | EMP003          | [it@example.com](mailto:it@example.com)                 | AKH-IT03-2026 |
+
+Kode di atas hanya digunakan untuk simulasi akademik dan tidak ditujukan untuk production.
+
+---
+
+## Alur Utama Sistem
+
+```text
+Admin HR mengelola data HRIS
+        ↓
+Admin HR membuat periode assessment
+        ↓
+Admin HR mengatur bobot assessor
+        ↓
+Admin HR menentukan peer
+        ↓
+Supervisor menyetujui peer
+        ↓
+Sistem membuat assessment assignment
+        ↓
+Employee, Supervisor, Peer, dan Subordinate mengisi assessment
+        ↓
+Sistem menghitung hasil penilaian
+        ↓
+Gap Analysis, IDP, dan Talent Mapping dihasilkan
+        ↓
+Management melihat analytics
+        ↓
+Admin HR atau Management mengekspor laporan
+        ↓
+IT Admin memonitor audit dan integrasi
 ```
 
-Menjalankan scheduler lokal untuk simulasi:
+---
 
-```bash
-php artisan schedule:work
-```
+## Struktur Penilaian
 
-Membersihkan cache Laravel:
+Setiap assessment terdiri dari 18 indikator.
+
+| Core Value  | Jumlah Indikator |
+| ----------- | ---------------: |
+| Amanah      |                3 |
+| Kompeten    |                3 |
+| Harmonis    |                3 |
+| Loyal       |                3 |
+| Adaptif     |                3 |
+| Kolaboratif |                3 |
+| Total       |               18 |
+
+Skala penilaian:
+
+| Nilai | Interpretasi        |
+| ----: | ------------------- |
+|     1 | Sangat Tidak Sesuai |
+|     2 | Tidak Sesuai        |
+|     3 | Cukup Sesuai        |
+|     4 | Sesuai              |
+|     5 | Sangat Sesuai       |
+
+---
+
+## Menjalankan Pengujian
+
+Bersihkan cache:
 
 ```bash
 php artisan optimize:clear
 ```
 
-## Struktur Modul
+Reset database:
 
-```text
-app/
-  Http/Controllers/
-    Analytics/
-    Assessment/
-    AssessmentCycle/
-    AuditCompliance/
-    Dashboard/
-    IdpTalent/
-    MasterData/
-    Notification/
-    Reports/
-  Models/
-  Services/
-database/
-  migrations/
-  seeders/
-resources/views/
-  analytics/
-  assessment/
-  assessment-cycle/
-  audit-compliance/
-  dashboards/
-  idp-talent/
-  master-data/
-  notifications/
-  reports/
-routes/
-  web.php
-  auth.php
-tests/
-  Feature/
+```bash
+php artisan migrate:fresh --seed
 ```
 
-## Catatan MVP
+Jalankan seluruh test:
 
-- SSO bersifat simulasi akademik. Implementasi produksi membutuhkan identity provider perusahaan.
-- HRIS integration disimulasikan melalui CSV import dan sync log.
-- Email reminder dapat menggunakan Laravel log driver atau Mailtrap.
-- Real-time dashboard menggunakan data database terbaru dan optional refresh, bukan websocket.
-- Payroll, remuneration, dan mobile app tidak termasuk scope aplikasi ini.
-
-## Testing Status
-
-Test suite terakhir:
-
-```text
-86 passed (493 assertions)
+```bash
+php artisan test
 ```
 
-## Lisensi
+Lihat daftar route:
 
-Project ini menggunakan Laravel dan dependency open-source sesuai lisensi masing-masing package. Aplikasi AKHLAK360 dibuat untuk kebutuhan demo akademik/proposal.
+```bash
+php artisan route:list --except-vendor
+```
+
+Build production asset:
+
+```bash
+npm run build
+```
+
+Hasil audit terakhir:
+
+* 124 test passed
+* 1.103 assertions passed
+* 106 routes verified
+* Vite production build passed
+* Lima role berhasil diuji melalui SSO
+* Unauthorized direct routes menghasilkan 403
+* Tidak ditemukan browser console error
+* Desktop dan laptop walkthrough berhasil
+
+---
+
+## Demo
+
+Dokumentasi demo tersedia pada:
+
+```text
+DEMO_SCRIPT.md
+docs/demo-rehearsal-report.md
+docs/end-to-end-audit-2026-06-18.md
+```
+
+Urutan demo yang disarankan:
+
+1. Login sebagai Admin HR
+2. Tampilkan HRIS employee data
+3. Tampilkan active assessment period
+4. Tampilkan bobot 40/20/30/10
+5. Tampilkan peer proposal
+6. Login Supervisor dan approve peer
+7. Isi satu assessment
+8. Login Admin HR dan recalculate result
+9. Tampilkan Gap Analysis
+10. Tampilkan IDP
+11. Tampilkan Talent Mapping
+12. Login Management dan tampilkan analytics
+13. Export report
+14. Login IT Admin dan tampilkan audit trail
+
+---
+
+## Scheduler dan Reminder
+
+Untuk menjalankan scheduler secara lokal:
+
+```bash
+php artisan schedule:work
+```
+
+Untuk menjalankan satu kali pengecekan scheduler:
+
+```bash
+php artisan schedule:run
+```
+
+Pada MVP lokal, pengiriman email menggunakan log driver.
+
+Pastikan konfigurasi:
+
+```env
+MAIL_MAILER=log
+```
+
+Notification in-app tetap tersedia.
+
+---
+
+## Keamanan
+
+Implementasi keamanan pada MVP:
+
+* CSRF protection
+* SSO-only public authentication
+* Generic authentication error
+* Rate limiting
+* Session regeneration
+* Role-based access control
+* Direct-route authorization
+* Active employee enforcement
+* Read-only employee identity profile
+* Audit logging
+* Confidential assessor data protection
+* Input validation
+* Transaction rollback
+* Duplicate assignment prevention
+* Duplicate submission prevention
+
+---
+
+## Batasan MVP
+
+Aplikasi ini merupakan MVP akademik.
+
+Hal yang masih menggunakan simulasi:
+
+* Company SSO
+* HRIS integration
+* Email delivery
+* Scheduler infrastructure
+* Production monitoring
+
+Hal yang belum termasuk:
+
+* OIDC atau SAML production
+* Live HRIS API
+* Production SMTP
+* Deployment monitoring
+* Load testing
+* Uptime validation
+* Payroll integration
+* Remuneration integration
+* Mobile application
+
+---
+
+## Catatan Production
+
+Sebelum digunakan pada lingkungan production, diperlukan:
+
+* Identity Provider perusahaan
+* OIDC atau SAML
+* API HRIS perusahaan
+* PostgreSQL atau database production lainnya
+* SMTP production
+* Scheduler atau queue worker
+* HTTPS
+* Secure secret management
+* Log monitoring
+* Backup database
+* Performance testing
+* Security testing
+* Disaster recovery plan
+
+---
+
+## Dokumentasi Audit
+
+Audit end-to-end terakhir mencakup:
+
+* SSO
+* Role-based access
+* Dashboard
+* HRIS
+* Assessment workflow
+* Peer approval
+* Assignment
+* Submission
+* Calculation
+* Gap analysis
+* IDP
+* Talent mapping
+* Reports
+* Export
+* Notification
+* Audit log
+* Compliance
+* Desktop walkthrough
+* Mobile review
+
+## Kontributor
+
+Project ini dikembangkan untuk kebutuhan tugas akademik Sistem Informasi.
+
+Tambahkan nama anggota kelompok pada bagian berikut:
+
+```text
+1. Arwan Nugraha Rahmatullah NIM 102012330470
+2. Annisa Dwi Nurul Humairah NIM 102012300085
+3. Jonathan Edgar Barasa NIM 102012300075
+```
+
+---
+
+## License
+
+Project ini dibuat untuk kebutuhan akademik.
+
+Penggunaan lebih lanjut harus mengikuti persetujuan pemilik project dan pihak terkait.
