@@ -46,6 +46,7 @@
                     </button>
                 </div>
             </div>
+            <a href="{{ route('idp-talent.idp-recommendations.index') }}" class="btn btn-sm btn-outline-secondary mt-2">Reset Filters</a>
         </form>
     </x-adminlte-card>
 

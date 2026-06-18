@@ -83,4 +83,69 @@ class HrisSyncModuleTest extends TestCase
             'action' => 'manual_sync',
         ]);
     }
+
+    public function test_sample_download_invalid_csv_and_order_independent_supervisor_mapping(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin_hr']);
+
+        $this->actingAs($admin)
+            ->get('/master-data/hris-sync/sample')
+            ->assertOk()
+            ->assertDownload('akhlak360-hris-sample.csv');
+
+        $this->actingAs($admin)
+            ->post('/master-data/hris-sync/import', [
+                'csv_file' => UploadedFile::fake()->createWithContent('invalid.csv', "name,department\nOnly Name,Operations"),
+            ])
+            ->assertSessionHasErrors('csv_file');
+
+        $this->assertDatabaseHas('hris_sync_logs', [
+            'sync_type' => 'import_csv',
+            'status' => 'failed',
+            'total_records' => 0,
+        ]);
+
+        $csv = implode("\n", [
+            'employee_number,name,department,supervisor_employee_number',
+            'EMP-LATE,Employee Before Supervisor,Operations,SUP-LATE',
+            'SUP-LATE,Supervisor Later,Operations,',
+        ]);
+
+        $this->actingAs($admin)
+            ->post('/master-data/hris-sync/import', [
+                'csv_file' => UploadedFile::fake()->createWithContent('out-of-order.csv', $csv),
+            ])
+            ->assertRedirect('/master-data/hris-sync')
+            ->assertSessionHas('success');
+
+        $employee = Employee::where('employee_number', 'EMP-LATE')->firstOrFail();
+        $supervisor = Employee::where('employee_number', 'SUP-LATE')->firstOrFail();
+        $this->assertSame($supervisor->id, $employee->supervisor_id);
+    }
+
+    public function test_hris_history_filters_persist_through_pagination_and_reject_invalid_values(): void
+    {
+        $it = User::factory()->create(['role' => 'it_admin']);
+
+        foreach (range(1, 12) as $index) {
+            \App\Models\HrisSyncLog::create([
+                'sync_type' => 'manual_sync',
+                'status' => 'success',
+                'message' => "Filtered sync {$index}",
+                'synced_by' => $it->id,
+            ]);
+        }
+
+        $this->actingAs($it)
+            ->get('/master-data/hris-sync?search=Filtered&sync_type=manual_sync&status=success')
+            ->assertOk()
+            ->assertSee('Filtered sync')
+            ->assertSee('search=Filtered')
+            ->assertSee('sync_type=manual_sync')
+            ->assertSee('status=success');
+
+        $this->actingAs($it)
+            ->get('/master-data/hris-sync?status=unknown')
+            ->assertSessionHasErrors('status');
+    }
 }

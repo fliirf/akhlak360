@@ -8,18 +8,56 @@
             <h1 class="m-0">HRIS Sync</h1>
             <p class="text-muted mb-0">Simulated HRIS CSV import and manual synchronization log.</p>
         </div>
-        <form method="POST" action="{{ route('master-data.hris-sync.manual') }}" class="mt-3 mt-md-0">
-            @csrf
-            <button type="submit" class="btn btn-info" onclick="return confirm('Run manual HRIS sync simulation?')">
-                <i class="fas fa-sync-alt mr-1"></i> Manual Sync
-            </button>
-        </form>
+        <div class="mt-3 mt-md-0">
+            <a href="{{ route('master-data.hris-sync.sample') }}" class="btn btn-outline-success">
+                <i class="fas fa-download mr-1"></i> Sample CSV
+            </a>
+            <form method="POST" action="{{ route('master-data.hris-sync.manual') }}" class="d-inline">
+                @csrf
+                <button type="submit" class="btn btn-info" onclick="return confirm('Run manual HRIS sync simulation?')">
+                    <i class="fas fa-sync-alt mr-1"></i> Manual Sync
+                </button>
+            </form>
+        </div>
     </div>
     @include('partials.breadcrumbs')
 @stop
 
 @section('content')
     @include('partials.flash')
+
+    <div class="row">
+        <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $summary['total'] }}" text="Total Sinkronisasi" icon="fas fa-sync" theme="primary"/></div>
+        <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $summary['successful'] }}" text="Berhasil" icon="fas fa-check-circle" theme="success"/></div>
+        <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $summary['failed'] }}" text="Gagal" icon="fas fa-times-circle" theme="danger"/></div>
+        <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $summary['latest']?->format('d M H:i') ?? '-' }}" text="Sinkronisasi Terakhir" icon="fas fa-clock" theme="info"/></div>
+    </div>
+
+    <x-adminlte-card title="Filter Sync History" theme="secondary" icon="fas fa-filter">
+        <form method="GET" action="{{ route('master-data.hris-sync.index') }}">
+            <div class="row">
+                <div class="col-md-3"><input type="search" name="search" value="{{ request('search') }}" class="form-control" placeholder="Search log message"></div>
+                <div class="col-md-2">
+                    <select name="sync_type" class="form-control">
+                        <option value="">All types</option>
+                        <option value="import_csv" @selected(request('sync_type') === 'import_csv')>CSV Import</option>
+                        <option value="manual_sync" @selected(request('sync_type') === 'manual_sync')>Manual Sync</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="status" class="form-control">
+                        <option value="">All statuses</option>
+                        <option value="success" @selected(request('status') === 'success')>Success</option>
+                        <option value="failed" @selected(request('status') === 'failed')>Failed</option>
+                    </select>
+                </div>
+                <div class="col-md-2"><input type="date" name="date_from" value="{{ request('date_from') }}" class="form-control" aria-label="From date"></div>
+                <div class="col-md-2"><input type="date" name="date_to" value="{{ request('date_to') }}" class="form-control" aria-label="To date"></div>
+                <div class="col-md-1"><button type="submit" class="btn btn-primary btn-block"><i class="fas fa-search"></i></button></div>
+            </div>
+            <a href="{{ route('master-data.hris-sync.index') }}" class="btn btn-sm btn-outline-secondary mt-2">Reset Filters</a>
+        </form>
+    </x-adminlte-card>
 
     <div class="row">
         <div class="col-lg-5">

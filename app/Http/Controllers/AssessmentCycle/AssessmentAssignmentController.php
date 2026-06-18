@@ -18,7 +18,13 @@ class AssessmentAssignmentController extends Controller
 {
     public function index(Request $request): View
     {
-        $assignments = AssessmentAssignment::query()
+        $request->validate([
+            'assessment_period_id' => ['nullable', 'integer', 'exists:assessment_periods,id'],
+            'status' => ['nullable', Rule::in(['pending', 'submitted'])],
+            'assessor_type' => ['nullable', Rule::in(['supervisor', 'peer', 'subordinate', 'self'])],
+            'department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')->where('is_active', true)],
+        ]);
+        $query = AssessmentAssignment::query()
             ->with([
                 'assessmentPeriod',
                 'assessor.department',
@@ -30,8 +36,8 @@ class AssessmentAssignmentController extends Controller
             ->when($request->filled('status'), fn (Builder $query) => $query->where('status', $request->status))
             ->when($request->filled('assessor_type'), fn (Builder $query) => $query->where('assessor_type', $request->assessor_type))
             ->when($request->filled('department_id'), fn (Builder $query) => $query
-                ->whereHas('assessee', fn (Builder $employeeQuery) => $employeeQuery->where('department_id', $request->integer('department_id'))))
-            ->latest()
+                ->whereHas('assessee', fn (Builder $employeeQuery) => $employeeQuery->where('department_id', $request->integer('department_id'))));
+        $assignments = (clone $query)->latest()
             ->paginate(10)
             ->withQueryString();
 
@@ -39,6 +45,12 @@ class AssessmentAssignmentController extends Controller
             'assignments' => $assignments,
             'periods' => AssessmentPeriod::orderByDesc('year')->orderByDesc('start_date')->get(),
             'departments' => Department::orderBy('name')->get(),
+            'activePeriod' => AssessmentPeriod::active()->first(),
+            'summary' => [
+                'total' => (clone $query)->count(),
+                'pending' => (clone $query)->pending()->count(),
+                'submitted' => (clone $query)->submitted()->count(),
+            ],
         ]);
     }
 

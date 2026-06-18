@@ -15,11 +15,16 @@ class AssessmentPeriodController extends Controller
 {
     public function index(Request $request): View
     {
+        $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'status' => ['nullable', Rule::in(['draft', 'active', 'closed'])],
+        ]);
+
         $periods = AssessmentPeriod::query()
             ->withCount(['assignments', 'weights'])
-            ->when($request->filled('search'), fn ($query) => $query
+            ->when($request->filled('search'), fn ($query) => $query->where(fn ($query) => $query
                 ->where('name', 'like', '%'.$request->search.'%')
-                ->orWhere('semester', 'like', '%'.$request->search.'%'))
+                ->orWhere('semester', 'like', '%'.$request->search.'%')))
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->status))
             ->orderByDesc('year')
             ->orderByDesc('start_date')
@@ -116,6 +121,24 @@ class AssessmentPeriodController extends Controller
         return redirect()
             ->route('assessment-cycle.periods.index')
             ->with('success', "Recalculated {$count} employee results for {$period->name}.");
+    }
+
+    public function close(Request $request, AssessmentPeriod $period, AssessmentResultService $resultService): RedirectResponse
+    {
+        if ($period->status === 'closed') {
+            return redirect()
+                ->route('assessment-cycle.periods.index')
+                ->with('warning', "{$period->name} is already closed.");
+        }
+
+        $count = $resultService->calculateForPeriod($period->id, $request->user()?->id);
+        $period->update(['status' => 'closed']);
+
+        $this->audit($request, 'close', "Closed assessment period {$period->name} after recalculating {$count} employee results.");
+
+        return redirect()
+            ->route('assessment-cycle.periods.index')
+            ->with('success', "{$period->name} closed successfully after recalculating {$count} employee results.");
     }
 
     private function validatedData(Request $request): array

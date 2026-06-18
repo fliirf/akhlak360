@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Models\AppNotification;
 use App\Models\AssessmentAssignment;
 use App\Models\AssessmentPeriod;
 use App\Models\AssessmentResult;
@@ -35,12 +36,20 @@ class DashboardController extends Controller
     {
         $activePeriod = AssessmentPeriod::active()->latest('start_date')->first();
         $assignmentQuery = AssessmentAssignment::query()
-            ->when($activePeriod, fn (Builder $query) => $query->where('assessment_period_id', $activePeriod->id));
+            ->when(
+                $activePeriod,
+                fn (Builder $query) => $query->where('assessment_period_id', $activePeriod->id),
+                fn (Builder $query) => $query->whereRaw('1 = 0')
+            );
         $totalAssignments = (clone $assignmentQuery)->count();
         $submittedAssignments = (clone $assignmentQuery)->submitted()->count();
         $pendingAssignments = (clone $assignmentQuery)->pending()->count();
         $resultQuery = AssessmentResult::query()
-            ->when($activePeriod, fn (Builder $query) => $query->where('assessment_period_id', $activePeriod->id));
+            ->when(
+                $activePeriod,
+                fn (Builder $query) => $query->where('assessment_period_id', $activePeriod->id),
+                fn (Builder $query) => $query->whereRaw('1 = 0')
+            );
 
         return view('dashboards.admin-hr', [
             'activePeriod' => $activePeriod,
@@ -59,15 +68,23 @@ class DashboardController extends Controller
                 'labels' => ['Submitted', 'Pending'],
                 'data' => [$submittedAssignments, $pendingAssignments],
             ],
+            'hasAssignments' => $totalAssignments > 0,
+            'hasResults' => (clone $resultQuery)->exists(),
         ]);
     }
 
     public function management(Request $request): View
     {
+        $validated = $request->validate([
+            'period_id' => ['nullable', 'integer', 'exists:assessment_periods,id'],
+            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
+        ]);
         $periods = AssessmentPeriod::orderByDesc('year')->orderByDesc('start_date')->get();
         $departments = Department::active()->orderBy('name')->get();
-        $selectedPeriod = $request->integer('period_id') ?: optional($periods->firstWhere('status', 'active'))->id;
-        $selectedDepartment = $request->integer('department_id') ?: null;
+        $selectedPeriod = isset($validated['period_id'])
+            ? (int) $validated['period_id']
+            : ($periods->firstWhere('status', 'active') ?? $periods->first())?->id;
+        $selectedDepartment = isset($validated['department_id']) ? (int) $validated['department_id'] : null;
 
         $resultQuery = AssessmentResult::query()
             ->with(['employee.department', 'assessmentPeriod'])
@@ -96,6 +113,13 @@ class DashboardController extends Controller
             'belowThresholdEmployees' => $period
                 ? (clone $resultQuery)->where('final_score', '<', $period->threshold_score)->get()
                 : collect(),
+            'summary' => [
+                'companyAverage' => $this->roundNullable((clone $resultQuery)->avg('final_score')),
+                'assessedEmployees' => (clone $resultQuery)->distinct('employee_id')->count('employee_id'),
+                'belowThreshold' => $period
+                    ? (clone $resultQuery)->where('final_score', '<', $period->threshold_score)->count()
+                    : 0,
+            ],
         ]);
     }
 
@@ -105,13 +129,21 @@ class DashboardController extends Controller
         $activePeriod = AssessmentPeriod::active()->latest('start_date')->first();
         $teamIds = $supervisor ? $supervisor->subordinates()->pluck('id') : collect();
         $assignmentQuery = AssessmentAssignment::query()
-            ->when($activePeriod, fn (Builder $query) => $query->where('assessment_period_id', $activePeriod->id))
+            ->when(
+                $activePeriod,
+                fn (Builder $query) => $query->where('assessment_period_id', $activePeriod->id),
+                fn (Builder $query) => $query->whereRaw('1 = 0')
+            )
             ->whereIn('assessee_employee_id', $teamIds);
         $totalAssignments = (clone $assignmentQuery)->count();
         $submittedAssignments = (clone $assignmentQuery)->submitted()->count();
         $resultQuery = AssessmentResult::query()
             ->whereIn('employee_id', $teamIds)
-            ->when($activePeriod, fn (Builder $query) => $query->where('assessment_period_id', $activePeriod->id));
+            ->when(
+                $activePeriod,
+                fn (Builder $query) => $query->where('assessment_period_id', $activePeriod->id),
+                fn (Builder $query) => $query->whereRaw('1 = 0')
+            );
 
         return view('dashboards.supervisor', [
             'activePeriod' => $activePeriod,
@@ -120,11 +152,17 @@ class DashboardController extends Controller
                 'teamMembers' => $teamIds->count(),
                 'completionRate' => $this->percentage($submittedAssignments, $totalAssignments),
                 'pendingApprovals' => $supervisor ? PeerApproval::pending()->where('supervisor_employee_id', $supervisor->id)->count() : 0,
-                'pendingAssessments' => $supervisor ? AssessmentAssignment::pending()->where('assessor_employee_id', $supervisor->id)->count() : 0,
+                'pendingAssessments' => $supervisor && $activePeriod ? AssessmentAssignment::pending()->where('assessment_period_id', $activePeriod->id)->where('assessor_employee_id', $supervisor->id)->count() : 0,
+                'submittedAssessments' => $supervisor && $activePeriod ? AssessmentAssignment::submitted()->where('assessment_period_id', $activePeriod->id)->where('assessor_employee_id', $supervisor->id)->count() : 0,
                 'teamAverageScore' => $this->roundNullable((clone $resultQuery)->avg('final_score')),
                 'belowThreshold' => $activePeriod ? (clone $resultQuery)->where('final_score', '<', $activePeriod->threshold_score)->count() : 0,
             ],
             'coreValueChart' => $this->coreValueAverages((clone $resultQuery)),
+            'recentTeamResults' => (clone $resultQuery)
+                ->with(['employee.department'])
+                ->latest('updated_at')
+                ->limit(8)
+                ->get(),
         ]);
     }
 
@@ -132,16 +170,16 @@ class DashboardController extends Controller
     {
         $employee = $request->user()->employee;
         $activePeriod = AssessmentPeriod::active()->latest('start_date')->first();
-        $result = $employee
+        $result = $employee && $activePeriod
             ? AssessmentResult::with('assessmentPeriod')
                 ->where('employee_id', $employee->id)
-                ->when($activePeriod, fn (Builder $query) => $query->where('assessment_period_id', $activePeriod->id))
+                ->where('assessment_period_id', $activePeriod->id)
                 ->latest()
                 ->first()
             : null;
-        $idp = $employee
+        $idp = $employee && $activePeriod
             ? IdpRecommendation::where('employee_id', $employee->id)
-                ->when($activePeriod, fn (Builder $query) => $query->where('assessment_period_id', $activePeriod->id))
+                ->where('assessment_period_id', $activePeriod->id)
                 ->latest()
                 ->first()
             : null;
@@ -150,8 +188,8 @@ class DashboardController extends Controller
             'activePeriod' => $activePeriod,
             'employee' => $employee,
             'stats' => [
-                'pendingAssessments' => $employee ? AssessmentAssignment::pending()->where('assessor_employee_id', $employee->id)->count() : 0,
-                'completedAssessments' => $employee ? AssessmentAssignment::submitted()->where('assessor_employee_id', $employee->id)->count() : 0,
+                'pendingAssessments' => $employee && $activePeriod ? AssessmentAssignment::pending()->where('assessment_period_id', $activePeriod->id)->where('assessor_employee_id', $employee->id)->count() : 0,
+                'completedAssessments' => $employee && $activePeriod ? AssessmentAssignment::submitted()->where('assessment_period_id', $activePeriod->id)->where('assessor_employee_id', $employee->id)->count() : 0,
             ],
             'result' => $result,
             'idp' => $idp,
@@ -168,6 +206,8 @@ class DashboardController extends Controller
 
     public function itAdmin(): View
     {
+        $latestSync = HrisSyncLog::with('syncedBy')->latest()->first();
+
         return view('dashboards.it-admin', [
             'stats' => [
                 'users' => User::count(),
@@ -176,11 +216,16 @@ class DashboardController extends Controller
                 'auditLogs' => AuditLog::count(),
                 'hrisSyncs' => HrisSyncLog::count(),
                 'failedHrisSyncs' => HrisSyncLog::failed()->count(),
+                'successfulHrisSyncs' => HrisSyncLog::successful()->count(),
+                'notificationActivity' => AppNotification::count(),
+                'reminderActivity' => AppNotification::type('assessment_reminder')->count(),
                 'failedJobs' => Schema::hasTable('failed_jobs') ? DB::table('failed_jobs')->count() : 0,
                 'queuedJobs' => Schema::hasTable('jobs') ? DB::table('jobs')->count() : 0,
             ],
             'hrisSyncLogs' => HrisSyncLog::with('syncedBy')->latest()->limit(8)->get(),
             'auditLogs' => AuditLog::with('user')->latest()->limit(10)->get(),
+            'latestSync' => $latestSync,
+            'notificationLogs' => AppNotification::with('user')->latest()->limit(8)->get(),
         ]);
     }
 

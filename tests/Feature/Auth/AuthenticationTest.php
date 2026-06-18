@@ -121,8 +121,7 @@ class AuthenticationTest extends TestCase
 
         $this->actingAs($admin)
             ->get('/admin/master-data')
-            ->assertOk()
-            ->assertSee('Master Data');
+            ->assertRedirect('/master-data/employees');
     }
 
     public function test_users_can_not_authenticate_with_invalid_password(): void

@@ -36,6 +36,7 @@
                     </button>
                 </div>
             </div>
+            <a href="{{ route('idp-talent.idp-recommendations.index') }}" class="btn btn-sm btn-outline-secondary mt-2">Reset Filters</a>
         </form>
     </x-adminlte-card>
 
@@ -70,8 +71,8 @@
 
 @section('js')
     <script>
-        const statusChartData = @json($statusChart);
-        const coreValueChartData = @json($coreValueChart);
+        const statusChartData = {{ Illuminate\Support\Js::from($statusChart) }};
+        const coreValueChartData = {{ Illuminate\Support\Js::from($coreValueChart) }};
 
         if (document.getElementById('statusChart')) {
             new Chart(document.getElementById('statusChart'), {

@@ -6,14 +6,22 @@ use App\Http\Controllers\Controller;
 use App\Models\AssessmentPeriod;
 use App\Models\AssessmentResult;
 use App\Models\Department;
+use App\Services\AnalyticsService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class GapAnalysisController extends Controller
 {
+    public function __construct(private readonly AnalyticsService $analytics) {}
+
     public function index(Request $request): View
     {
+        $validated = $request->validate([
+            'period_id' => ['nullable', 'integer', Rule::exists('assessment_periods', 'id')],
+            'department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')->where('is_active', true)],
+        ]);
         $periods = AssessmentPeriod::orderByDesc('year')
             ->orderByDesc('start_date')
             ->get();
@@ -21,8 +29,10 @@ class GapAnalysisController extends Controller
             ->orderBy('name')
             ->get();
 
-        $selectedPeriod = $request->integer('period_id') ?: optional($periods->firstWhere('status', 'active'))->id;
-        $selectedDepartment = $request->integer('department_id') ?: null;
+        $selectedPeriod = isset($validated['period_id'])
+            ? (int) $validated['period_id']
+            : ($periods->firstWhere('status', 'active') ?? $periods->first())?->id;
+        $selectedDepartment = isset($validated['department_id']) ? (int) $validated['department_id'] : null;
 
         $baseQuery = AssessmentResult::query()
             ->with(['employee.department', 'assessmentPeriod'])
@@ -42,6 +52,11 @@ class GapAnalysisController extends Controller
             ->select('assessment_results.*')
             ->paginate(15)
             ->withQueryString();
+        $results->getCollection()->transform(function (AssessmentResult $result) {
+            $result->setAttribute('gap_interpretation', $this->analytics->gapInterpretation($result->gap_score));
+
+            return $result;
+        });
 
         return view('analytics.gap-analysis', [
             'periods' => $periods,

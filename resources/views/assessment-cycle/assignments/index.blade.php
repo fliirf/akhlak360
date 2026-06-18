@@ -16,6 +16,19 @@
     <div class="assignments-index-page">
     @include('partials.flash')
 
+    @if (! $activePeriod)
+        <div class="alert alert-warning">
+            Tidak ada periode aktif. Assignment manual masih dapat dilihat, tetapi generator memerlukan periode aktif.
+            <a href="{{ route('assessment-cycle.periods.create') }}" class="btn btn-sm btn-warning ml-2">Buat Periode</a>
+        </div>
+    @endif
+
+    <div class="row">
+        <div class="col-lg-4 col-6"><x-adminlte-small-box title="{{ $summary['total'] }}" text="Total Assignment" icon="fas fa-clipboard-list" theme="primary"/></div>
+        <div class="col-lg-4 col-6"><x-adminlte-small-box title="{{ $summary['submitted'] }}" text="Submitted" icon="fas fa-check-circle" theme="success"/></div>
+        <div class="col-lg-4 col-12"><x-adminlte-small-box title="{{ $summary['pending'] }}" text="Pending" icon="fas fa-hourglass-half" theme="warning"/></div>
+    </div>
+
     <x-adminlte-card title="Generate Assignments" theme="info" icon="fas fa-magic">
         <div class="row">
             @foreach ([

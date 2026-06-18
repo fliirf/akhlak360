@@ -38,6 +38,12 @@
     </x-adminlte-card>
 
     <div class="row">
+        <div class="col-lg-4 col-6"><x-adminlte-small-box title="{{ $summary['companyAverage'] !== null ? number_format($summary['companyAverage'], 2) : '-' }}" text="Rata-rata Perusahaan" icon="fas fa-star" theme="primary"/></div>
+        <div class="col-lg-4 col-6"><x-adminlte-small-box title="{{ $summary['assessedEmployees'] }}" text="Pegawai Dinilai" icon="fas fa-user-check" theme="success"/></div>
+        <div class="col-lg-4 col-12"><x-adminlte-small-box title="{{ $summary['belowThreshold'] }}" text="Di Bawah Threshold" icon="fas fa-exclamation-triangle" theme="danger"/></div>
+    </div>
+
+    <div class="row">
         <div class="col-lg-4 col-6"><x-adminlte-small-box title="{{ $gapSummary['averageSelf'] ?? '-' }}" text="Average Self Score" icon="fas fa-user" theme="primary"/></div>
         <div class="col-lg-4 col-6"><x-adminlte-small-box title="{{ $gapSummary['averageOthers'] ?? '-' }}" text="Average Others Score" icon="fas fa-users" theme="info"/></div>
         <div class="col-lg-4 col-12"><x-adminlte-small-box title="{{ $gapSummary['averageGap'] ?? '-' }}" text="Self vs Others Gap" icon="fas fa-balance-scale" theme="warning"/></div>
@@ -108,10 +114,10 @@
 
 @section('js')
     <script>
-        const coreValueData = @json($coreValueChart);
-        const departmentData = @json($departmentChart);
-        const trendData = @json($trendChart);
-        const talentData = @json($talentMappingChart);
+        const coreValueData = {{ Illuminate\Support\Js::from($coreValueChart) }};
+        const departmentData = {{ Illuminate\Support\Js::from($departmentChart) }};
+        const trendData = {{ Illuminate\Support\Js::from($trendChart) }};
+        const talentData = {{ Illuminate\Support\Js::from($talentMappingChart) }};
 
         const yScore = { beginAtZero: true, max: 5 };
         if (document.getElementById('coreValueChart')) new Chart(document.getElementById('coreValueChart'), {

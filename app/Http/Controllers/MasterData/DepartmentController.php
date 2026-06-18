@@ -14,6 +14,10 @@ class DepartmentController extends Controller
 {
     public function index(Request $request): View
     {
+        $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+        ]);
+
         $departments = Department::query()
             ->withCount('employees')
             ->search($request->string('search')->toString())

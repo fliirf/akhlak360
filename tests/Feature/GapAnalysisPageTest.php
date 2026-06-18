@@ -43,15 +43,15 @@ class GapAnalysisPageTest extends TestCase
             ->assertSee('Gap Analysis')
             ->assertSee('EMP-GAP-001')
             ->assertSee('Higher Self')
-            ->assertSee('Self rating higher than others')
+            ->assertSee('Penilaian diri lebih tinggi')
             ->assertSee('EMP-GAP-002')
-            ->assertSee('Self rating lower than others')
+            ->assertSee('Penilaian diri lebih rendah')
             ->assertDontSee('Aligned Person');
 
         $this->actingAs($user)
             ->get("/analytics/gap-analysis?period_id={$period->id}")
             ->assertOk()
-            ->assertSee('Aligned')
+            ->assertSee('Selaras')
             ->assertSee('averageGapChart')
             ->assertSee('gapDistributionChart');
     }

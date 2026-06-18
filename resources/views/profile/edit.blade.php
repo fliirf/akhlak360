@@ -40,8 +40,26 @@
                             <th>Status</th>
                             <td><span class="badge badge-success">Aktif</span></td>
                         </tr>
+                        <tr><th>Role</th><td>{{ ucfirst(str_replace('_', ' ', $user->role)) }}</td></tr>
+                        <tr><th>Login terakhir</th><td>{{ $user->last_login_at?->format('d M Y H:i') ?? '-' }}</td></tr>
                     </tbody>
                 </table>
+            </x-adminlte-card>
+
+            <x-adminlte-card title="Profil Kepegawaian" theme="info" icon="fas fa-address-card">
+                @if ($user->employee)
+                    <table class="table table-sm mb-0">
+                        <tr><th>NIP</th><td>{{ $user->employee->employee_number }}</td></tr>
+                        <tr><th>Departemen</th><td>{{ $user->employee->department?->name ?? '-' }}</td></tr>
+                        <tr><th>Jabatan</th><td>{{ $user->employee->position?->name ?? '-' }}</td></tr>
+                        <tr><th>Supervisor</th><td>{{ $user->employee->supervisor?->name ?? '-' }}</td></tr>
+                        <tr><th>Status kerja</th><td>{{ ucfirst($user->employee->employment_status) }}</td></tr>
+                        <tr><th>HRIS ID</th><td>{{ $user->employee->hris_external_id ?? '-' }}</td></tr>
+                        <tr><th>Sinkronisasi</th><td>{{ $user->employee->last_synced_at?->format('d M Y H:i') ?? '-' }}</td></tr>
+                    </table>
+                @else
+                    <div class="alert alert-light border mb-0">Akun ini belum terhubung dengan profil pegawai.</div>
+                @endif
             </x-adminlte-card>
 
             <x-adminlte-card title="Zona Berisiko" theme="danger" icon="fas fa-exclamation-triangle">

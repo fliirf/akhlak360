@@ -17,6 +17,7 @@ class SendAssessmentReminders extends Command
 
     public function handle(): int
     {
+        $interval = max(1, (int) config('akhlak360.reminder_interval_days', 3));
         $today = now()->startOfDay();
         $created = 0;
         $skipped = 0;
@@ -31,8 +32,9 @@ class SendAssessmentReminders extends Command
             $period = $assignment->assessmentPeriod;
             $daysSinceStart = $period->start_date->startOfDay()->diffInDays($today, false);
 
-            if ($daysSinceStart < 0 || $daysSinceStart % 3 !== 0) {
+            if ($daysSinceStart < 0 || $daysSinceStart % $interval !== 0) {
                 $skipped++;
+
                 continue;
             }
 
@@ -40,6 +42,7 @@ class SendAssessmentReminders extends Command
 
             if (! $user) {
                 $skipped++;
+
                 continue;
             }
 
@@ -54,19 +57,25 @@ class SendAssessmentReminders extends Command
 
             if ($alreadySentToday) {
                 $skipped++;
+
                 continue;
             }
 
             $message = "Please complete your {$assignment->assessor_type} assessment for {$assignment->assessee->name} before {$period->end_date->format('d M Y')}.";
 
-            AppNotification::create([
-                'user_id' => $user->id,
-                'title' => $title,
-                'message' => $message,
-                'type' => 'assessment_reminder',
-            ]);
+            if (config('akhlak360.in_app_notifications_enabled', true)) {
+                AppNotification::create([
+                    'user_id' => $user->id,
+                    'title' => $title,
+                    'message' => $message,
+                    'type' => 'assessment_reminder',
+                    'destination_url' => route('assessment.fill.show', $assignment, false),
+                ]);
+            }
 
-            Mail::to($user->email)->send(new AssessmentReminderMail($title, $message));
+            if (config('akhlak360.email_notifications_enabled', true)) {
+                Mail::to($user->email)->send(new AssessmentReminderMail($title, $message));
+            }
 
             $created++;
         }

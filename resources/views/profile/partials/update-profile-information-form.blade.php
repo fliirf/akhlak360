@@ -27,7 +27,7 @@
             <div class="alert alert-warning mt-3 mb-0">
                 <i class="fas fa-envelope mr-1"></i>
                 {{ __('Your email address is unverified.') }}
-                <button form="send-verification" class="btn btn-link btn-sm p-0 align-baseline">
+                <button type="submit" form="send-verification" class="btn btn-link btn-sm p-0 align-baseline">
                     {{ __('Click here to re-send the verification email.') }}
                 </button>
 

@@ -17,6 +17,12 @@ class IdpRecommendationController extends Controller
 {
     public function index(Request $request): View
     {
+        $request->validate([
+            'period_id' => ['nullable', 'integer', 'exists:assessment_periods,id'],
+            'department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')->where('is_active', true)],
+            'status' => ['nullable', Rule::in($this->statuses())],
+        ]);
+
         if ($request->user()->hasRole('management')) {
             return $this->summary($request);
         }

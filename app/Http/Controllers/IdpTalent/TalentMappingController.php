@@ -9,8 +9,9 @@ use App\Models\Department;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TalentMappingController extends Controller
 {
@@ -23,12 +24,15 @@ class TalentMappingController extends Controller
 
     public function index(Request $request): View
     {
+        $validated = $this->validateFilters($request);
         $periods = AssessmentPeriod::orderByDesc('year')->orderByDesc('start_date')->get();
         $departments = Department::active()->orderBy('name')->get();
-        $selectedPeriod = $request->integer('period_id') ?: optional($periods->firstWhere('status', 'active'))->id;
-        $selectedDepartment = $request->integer('department_id') ?: null;
-        $allResults = $this->filteredQuery($selectedPeriod, $selectedDepartment)->get();
-        $results = $this->filteredQuery($selectedPeriod, $selectedDepartment)
+        $selectedPeriod = isset($validated['period_id'])
+            ? (int) $validated['period_id']
+            : ($periods->firstWhere('status', 'active') ?? $periods->first())?->id;
+        $selectedDepartment = isset($validated['department_id']) ? (int) $validated['department_id'] : null;
+        $allResults = $this->filteredQuery($request, $selectedPeriod, $selectedDepartment)->get();
+        $results = $this->filteredQuery($request, $selectedPeriod, $selectedDepartment)
             ->paginate(15)
             ->withQueryString();
 
@@ -43,16 +47,19 @@ class TalentMappingController extends Controller
                 'labels' => self::CATEGORIES,
                 'data' => $this->categoryCounts($allResults)->values()->all(),
             ],
+            'canExport' => $request->user()->hasRole(['admin_hr', 'management']),
         ]);
     }
 
     public function export(Request $request): StreamedResponse
     {
-        $selectedPeriod = $request->integer('period_id') ?: null;
-        $selectedDepartment = $request->integer('department_id') ?: null;
+        abort_unless($request->user()->hasRole(['admin_hr', 'management']), 403);
+        $validated = $this->validateFilters($request);
+        $selectedPeriod = isset($validated['period_id']) ? (int) $validated['period_id'] : null;
+        $selectedDepartment = isset($validated['department_id']) ? (int) $validated['department_id'] : null;
         $filename = 'talent-mapping-'.now()->format('Ymd-His').'.csv';
 
-        return response()->streamDownload(function () use ($selectedPeriod, $selectedDepartment): void {
+        return response()->streamDownload(function () use ($request, $selectedPeriod, $selectedDepartment): void {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
                 'employee_name',
@@ -64,7 +71,7 @@ class TalentMappingController extends Controller
                 'idp_status',
             ]);
 
-            $this->filteredQuery($selectedPeriod, $selectedDepartment)
+            $this->filteredQuery($request, $selectedPeriod, $selectedDepartment)
                 ->chunk(100, function (Collection $results) use ($handle): void {
                     foreach ($results as $result) {
                         fputcsv($handle, [
@@ -85,7 +92,7 @@ class TalentMappingController extends Controller
         ]);
     }
 
-    private function filteredQuery(?int $periodId, ?int $departmentId): Builder
+    private function filteredQuery(Request $request, ?int $periodId, ?int $departmentId): Builder
     {
         return AssessmentResult::query()
             ->with(['assessmentPeriod', 'employee.department'])
@@ -96,6 +103,13 @@ class TalentMappingController extends Controller
                 'employee',
                 fn (Builder $employeeQuery) => $employeeQuery->where('department_id', $departmentId)
             ))
+            ->when($request->user()->hasRole('employee'), fn (Builder $query) => $query
+                ->where('assessment_results.employee_id', $request->user()->employee?->id ?? 0))
+            ->when($request->user()->hasRole('supervisor'), fn (Builder $query) => $query->where(function (Builder $query) use ($request) {
+                $supervisorId = $request->user()->employee?->id ?? 0;
+                $query->where('assessment_results.employee_id', $supervisorId)
+                    ->orWhereHas('employee', fn (Builder $employeeQuery) => $employeeQuery->where('supervisor_id', $supervisorId));
+            }))
             ->join('employees', 'employees.id', '=', 'assessment_results.employee_id')
             ->orderBy('employees.name')
             ->select('assessment_results.*');
@@ -107,5 +121,13 @@ class TalentMappingController extends Controller
 
         return collect(self::CATEGORIES)
             ->mapWithKeys(fn (string $category) => [$category => $grouped[$category] ?? 0]);
+    }
+
+    private function validateFilters(Request $request): array
+    {
+        return $request->validate([
+            'period_id' => ['nullable', 'integer', 'exists:assessment_periods,id'],
+            'department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')->where('is_active', true)],
+        ]);
     }
 }

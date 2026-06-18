@@ -18,6 +18,7 @@ class AppNotification extends Model
         'title',
         'message',
         'type',
+        'destination_url',
         'read_at',
     ];
 

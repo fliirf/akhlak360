@@ -16,6 +16,12 @@
         <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $stats['auditLogs'] }}" text="Audit Logs" icon="fas fa-shield-alt" theme="secondary"/></div>
     </div>
     <div class="row">
+        <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $stats['successfulHrisSyncs'] }}" text="Successful Syncs" icon="fas fa-check-circle" theme="success"/></div>
+        <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $stats['notificationActivity'] }}" text="Notifications" icon="fas fa-bell" theme="info"/></div>
+        <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $stats['reminderActivity'] }}" text="Reminder Activity" icon="fas fa-clock" theme="warning"/></div>
+        <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $latestSync?->created_at?->format('d M H:i') ?? '-' }}" text="Latest HRIS Sync" icon="fas fa-sync-alt" theme="primary"/></div>
+    </div>
+    <div class="row">
         <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $stats['hrisSyncs'] }}" text="HRIS Sync Logs" icon="fas fa-sync" theme="primary"/></div>
         <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $stats['failedHrisSyncs'] }}" text="Failed HRIS Syncs" icon="fas fa-times-circle" theme="danger"/></div>
         <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $stats['queuedJobs'] }}" text="Queued Jobs" icon="fas fa-stream" theme="warning"/></div>
@@ -67,4 +73,11 @@
             </x-adminlte-card>
         </div>
     </div>
+
+    <x-adminlte-card title="Aktivitas Notifikasi dan Reminder" theme="info" icon="fas fa-bell">
+        <div class="table-responsive"><table class="table table-striped mb-0">
+            <thead><tr><th>Waktu</th><th>Pengguna</th><th>Tipe</th><th>Judul</th></tr></thead>
+            <tbody>@forelse($notificationLogs as $notification)<tr><td>{{ $notification->created_at->format('d M Y H:i') }}</td><td>{{ $notification->user?->name ?? '-' }}</td><td><span class="badge badge-info">{{ str_replace('_', ' ', $notification->type) }}</span></td><td>{{ $notification->title }}</td></tr>@empty<tr><td colspan="4" class="text-center text-muted">Belum ada aktivitas notifikasi.</td></tr>@endforelse</tbody>
+        </table></div>
+    </x-adminlte-card>
 @stop

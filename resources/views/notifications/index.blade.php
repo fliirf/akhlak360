@@ -19,7 +19,38 @@
 @section('content')
     @include('partials.flash')
 
+    <div class="row">
+        <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $summary['total'] }}" text="Total Notifikasi" icon="fas fa-bell" theme="primary"/></div>
+        <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $summary['unread'] }}" text="Belum Dibaca" icon="fas fa-envelope" theme="danger"/></div>
+        <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $summary['reminders'] }}" text="Reminder" icon="fas fa-clock" theme="warning"/></div>
+        <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $summary['results'] }}" text="Hasil dan IDP" icon="fas fa-chart-bar" theme="success"/></div>
+    </div>
+
     <x-adminlte-card title="Notification Center" theme="primary" icon="fas fa-bell">
+        <form method="GET" action="{{ route('notifications.index') }}" class="mb-3">
+            <div class="row">
+                <div class="col-md-4">
+                    <input type="search" name="search" value="{{ request('search') }}" class="form-control" placeholder="Cari judul atau pesan">
+                </div>
+                <div class="col-md-3">
+                    <select name="status" class="form-control">
+                        <option value="">Semua status</option>
+                        <option value="unread" @selected(request('status') === 'unread')>Belum dibaca</option>
+                        <option value="read" @selected(request('status') === 'read')>Sudah dibaca</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select name="type" class="form-control">
+                        <option value="">Semua tipe</option>
+                        @foreach ($types as $type)
+                            <option value="{{ $type }}" @selected(request('type') === $type)>{{ ucfirst(str_replace('_', ' ', $type)) }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-md-2"><button type="submit" class="btn btn-primary btn-block">Filter</button></div>
+            </div>
+            <a href="{{ route('notifications.index') }}" class="btn btn-sm btn-outline-secondary mt-2">Reset Filters</a>
+        </form>
         <div class="table-responsive">
             <table class="table table-hover table-striped">
                 <thead>
@@ -60,7 +91,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="text-center text-muted">No notifications found.</td>
+                            <td colspan="6" class="text-center text-muted">Tidak ada notifikasi untuk filter ini.</td>
                         </tr>
                     @endforelse
                 </tbody>

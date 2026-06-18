@@ -11,15 +11,56 @@ use App\Models\Position;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class HrisSyncController extends Controller
 {
-    public function index(): View
+    private const REQUIRED_HEADERS = ['employee_number', 'name', 'department'];
+
+    public function index(Request $request): View
     {
-        return view('master-data.hris-sync.index', [
-            'logs' => HrisSyncLog::with('syncedBy')->latest()->paginate(10),
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'sync_type' => ['nullable', Rule::in(['import_csv', 'manual_sync'])],
+            'status' => ['nullable', Rule::in(['success', 'failed'])],
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
         ]);
+        $query = HrisSyncLog::query()
+            ->with('syncedBy')
+            ->when($validated['search'] ?? null, fn ($query, $search) => $query->where('message', 'like', '%'.$search.'%'))
+            ->when($validated['sync_type'] ?? null, fn ($query, $type) => $query->where('sync_type', $type))
+            ->when($validated['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
+            ->when($validated['date_from'] ?? null, fn ($query, $date) => $query->whereDate('created_at', '>=', $date))
+            ->when($validated['date_to'] ?? null, fn ($query, $date) => $query->whereDate('created_at', '<=', $date));
+        $latest = (clone $query)->latest()->first();
+
+        return view('master-data.hris-sync.index', [
+            'logs' => (clone $query)->latest()->paginate(10)->withQueryString(),
+            'summary' => [
+                'total' => (clone $query)->count(),
+                'successful' => (clone $query)->successful()->count(),
+                'failed' => (clone $query)->failed()->count(),
+                'latest' => $latest?->created_at,
+            ],
+        ]);
+    }
+
+    public function sample(): StreamedResponse
+    {
+        return response()->streamDownload(function (): void {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, [
+                'employee_number', 'name', 'email', 'department_code', 'department',
+                'position', 'position_level', 'supervisor_employee_number',
+                'employment_status', 'hris_external_id',
+            ]);
+            fputcsv($handle, ['SUP-001', 'Demo Supervisor', 'supervisor@example.com', 'OPS', 'Operations', 'Supervisor', 'L3', '', 'active', 'HRIS-SUP-001']);
+            fputcsv($handle, ['EMP-001', 'Demo Employee', 'employee@example.com', 'OPS', 'Operations', 'Staff', 'L1', 'SUP-001', 'active', 'HRIS-EMP-001']);
+            fclose($handle);
+        }, 'akhlak360-hris-sample.csv', ['Content-Type' => 'text/csv']);
     }
 
     public function import(Request $request): RedirectResponse
@@ -28,18 +69,37 @@ class HrisSyncController extends Controller
             'csv_file' => ['required', 'file', 'mimes:csv,txt', 'max:2048'],
         ]);
 
-        $rows = $this->readCsv($request->file('csv_file')->getRealPath());
+        try {
+            $rows = $this->readCsv($request->file('csv_file')->getRealPath());
+        } catch (\Throwable $exception) {
+            $this->recordSync($request, 'failed', 0, 0, 0, $exception->getMessage());
+
+            return back()->withInput()->withErrors(['csv_file' => $exception->getMessage()]);
+        }
+
         $success = 0;
         $failed = 0;
         $messages = [];
+        $successfulRows = [];
 
         foreach ($rows as $index => $row) {
             try {
-                $this->syncRow($row);
+                $this->syncRow($row, false);
                 $success++;
+                $successfulRows[] = ['index' => $index, 'row' => $row];
             } catch (\Throwable $exception) {
                 $failed++;
                 $messages[] = 'Row '.($index + 2).': '.$exception->getMessage();
+            }
+        }
+
+        foreach ($successfulRows as $item) {
+            try {
+                $this->syncSupervisor($item['row']);
+            } catch (\Throwable $exception) {
+                $failed++;
+                $success--;
+                $messages[] = 'Row '.($item['index'] + 2).': '.$exception->getMessage();
             }
         }
 
@@ -48,24 +108,7 @@ class HrisSyncController extends Controller
             ? 'CSV import completed successfully.'
             : implode(' | ', array_slice($messages, 0, 5));
 
-        HrisSyncLog::create([
-            'sync_type' => 'import_csv',
-            'status' => $status,
-            'total_records' => count($rows),
-            'success_records' => $success,
-            'failed_records' => $failed,
-            'message' => $message,
-            'synced_by' => $request->user()?->id,
-        ]);
-
-        AuditLog::create([
-            'user_id' => $request->user()?->id,
-            'action' => 'import_csv',
-            'module' => 'hris_sync',
-            'description' => "Imported HRIS CSV with {$success} success and {$failed} failed records.",
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-        ]);
+        $this->recordSync($request, $status, count($rows), $success, $failed, $message);
 
         return redirect()
             ->route('master-data.hris-sync.index')
@@ -99,13 +142,31 @@ class HrisSyncController extends Controller
     private function readCsv(string $path): array
     {
         $handle = fopen($path, 'r');
+
+        if ($handle === false) {
+            throw new \RuntimeException('CSV file could not be opened.');
+        }
+
         $headers = fgetcsv($handle);
 
         if (! $headers) {
             throw new \RuntimeException('CSV file is empty.');
         }
 
-        $headers = array_map(fn (string $header) => strtolower(trim($header)), $headers);
+        $headers = array_map(fn ($header) => strtolower(trim((string) $header)), $headers);
+
+        if (count($headers) !== count(array_unique($headers))) {
+            fclose($handle);
+            throw new \RuntimeException('CSV contains duplicate column names.');
+        }
+
+        $missing = array_diff(self::REQUIRED_HEADERS, $headers);
+
+        if ($missing !== []) {
+            fclose($handle);
+            throw new \RuntimeException('CSV is missing required columns: '.implode(', ', $missing).'.');
+        }
+
         $rows = [];
 
         while (($values = fgetcsv($handle)) !== false) {
@@ -113,15 +174,27 @@ class HrisSyncController extends Controller
                 continue;
             }
 
-            $rows[] = array_combine($headers, array_slice(array_pad($values, count($headers), null), 0, count($headers)));
+            $normalized = array_slice(array_pad($values, count($headers), null), 0, count($headers));
+            $combined = array_combine($headers, $normalized);
+
+            if ($combined === false) {
+                fclose($handle);
+                throw new \RuntimeException('CSV row structure is invalid.');
+            }
+
+            $rows[] = $combined;
         }
 
         fclose($handle);
 
+        if ($rows === []) {
+            throw new \RuntimeException('CSV does not contain any employee rows.');
+        }
+
         return $rows;
     }
 
-    private function syncRow(array $row): void
+    private function syncRow(array $row, bool $mapSupervisor = true): void
     {
         $employeeNumber = trim((string) Arr::get($row, 'employee_number', ''));
         $name = trim((string) Arr::get($row, 'name', ''));
@@ -153,19 +226,12 @@ class HrisSyncController extends Controller
             );
         }
 
-        $supervisor = null;
-        $supervisorNumber = trim((string) Arr::get($row, 'supervisor_employee_number', ''));
-
-        if ($supervisorNumber !== '' && $supervisorNumber !== $employeeNumber) {
-            $supervisor = Employee::where('employee_number', $supervisorNumber)->first();
-        }
-
         Employee::updateOrCreate(
             ['employee_number' => $employeeNumber],
             [
                 'department_id' => $department->id,
                 'position_id' => $position?->id,
-                'supervisor_id' => $supervisor?->id,
+                ...($mapSupervisor ? ['supervisor_id' => $this->supervisorId($row, $employeeNumber)] : []),
                 'name' => $name,
                 'email' => trim((string) Arr::get($row, 'email', '')) ?: null,
                 'employment_status' => in_array(Arr::get($row, 'employment_status'), ['active', 'inactive'], true)
@@ -175,5 +241,56 @@ class HrisSyncController extends Controller
                 'last_synced_at' => now(),
             ],
         );
+    }
+
+    private function syncSupervisor(array $row): void
+    {
+        $employeeNumber = trim((string) Arr::get($row, 'employee_number', ''));
+        Employee::where('employee_number', $employeeNumber)->update([
+            'supervisor_id' => $this->supervisorId($row, $employeeNumber),
+        ]);
+    }
+
+    private function supervisorId(array $row, string $employeeNumber): ?int
+    {
+        $supervisorNumber = trim((string) Arr::get($row, 'supervisor_employee_number', ''));
+
+        if ($supervisorNumber === '') {
+            return null;
+        }
+
+        if ($supervisorNumber === $employeeNumber) {
+            throw new \InvalidArgumentException('An employee cannot supervise themselves.');
+        }
+
+        $supervisor = Employee::where('employee_number', $supervisorNumber)->first();
+
+        if (! $supervisor) {
+            throw new \InvalidArgumentException("Supervisor {$supervisorNumber} was not found.");
+        }
+
+        return $supervisor->id;
+    }
+
+    private function recordSync(Request $request, string $status, int $total, int $success, int $failed, string $message): void
+    {
+        HrisSyncLog::create([
+            'sync_type' => 'import_csv',
+            'status' => $status,
+            'total_records' => $total,
+            'success_records' => $success,
+            'failed_records' => $failed,
+            'message' => $message,
+            'synced_by' => $request->user()?->id,
+        ]);
+
+        AuditLog::create([
+            'user_id' => $request->user()?->id,
+            'action' => 'import_csv',
+            'module' => 'hris_sync',
+            'description' => "Imported HRIS CSV with {$success} success and {$failed} failed records.",
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
     }
 }

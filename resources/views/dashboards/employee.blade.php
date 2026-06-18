@@ -14,6 +14,15 @@
 @stop
 
 @section('content')
+    @if (! $employee)
+        <div class="alert alert-warning">Akun Anda belum terhubung ke profil pegawai. Hubungi Admin HR agar hasil personal dapat ditampilkan.</div>
+    @elseif (! $activePeriod)
+        <div class="alert alert-info">Belum ada periode penilaian aktif.</div>
+    @elseif (! $result)
+        <div class="alert alert-info">Hasil periode ini belum tersedia. Selesaikan assignment atau tunggu Admin HR melakukan kalkulasi hasil.
+            <a class="btn btn-sm btn-info ml-2" href="{{ route('assessment.pending.index') }}">Lihat Assessment</a>
+        </div>
+    @endif
     <div class="row">
         <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $stats['pendingAssessments'] }}" text="Pending Assessments" icon="fas fa-hourglass-half" theme="warning"/></div>
         <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $stats['completedAssessments'] }}" text="Completed Assessments" icon="fas fa-check-circle" theme="success"/></div>
@@ -64,8 +73,8 @@
 
 @section('js')
     <script>
-        const personalCoreData = @json($personalCoreChart);
-        const gapData = @json($gapChart);
+        const personalCoreData = {{ Illuminate\Support\Js::from($personalCoreChart) }};
+        const gapData = {{ Illuminate\Support\Js::from($gapChart) }};
 
         if (document.getElementById('personalCoreChart')) {
             new Chart(document.getElementById('personalCoreChart'), {

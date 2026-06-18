@@ -5,10 +5,13 @@ namespace App\Http\Controllers\Assessment;
 use App\Http\Controllers\Controller;
 use App\Models\AppNotification;
 use App\Models\AssessmentAssignment;
+use App\Models\AssessmentPeriod;
 use App\Models\AssessmentResponse;
+use App\Models\AssessmentResult;
 use App\Models\AuditLog;
 use App\Models\User;
 use App\Services\AssessmentResultService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -69,6 +72,39 @@ class AssessmentFormController extends Controller
         return redirect()->route('assessment.pending.index');
     }
 
+    public function results(Request $request): View
+    {
+        $employee = $this->employeeOrAbort($request);
+        $validated = $request->validate([
+            'period_id' => ['nullable', 'integer', 'exists:assessment_periods,id'],
+        ]);
+        $periods = AssessmentPeriod::orderByDesc('year')->orderByDesc('start_date')->get();
+        $selectedPeriod = isset($validated['period_id'])
+            ? (int) $validated['period_id']
+            : ($periods->firstWhere('status', 'active') ?? $periods->first())?->id;
+        $employeeIds = $request->user()->hasRole('supervisor')
+            ? $employee->subordinates()->pluck('id')->push($employee->id)
+            : collect([$employee->id]);
+
+        $results = AssessmentResult::query()
+            ->with(['assessmentPeriod', 'employee.department', 'employee.idpRecommendations' => fn ($query) => $query
+                ->when($selectedPeriod, fn ($query) => $query->where('assessment_period_id', $selectedPeriod))])
+            ->whereIn('employee_id', $employeeIds)
+            ->when($selectedPeriod, fn (Builder $query) => $query->where('assessment_period_id', $selectedPeriod))
+            ->join('employees', 'employees.id', '=', 'assessment_results.employee_id')
+            ->orderBy('employees.name')
+            ->select('assessment_results.*')
+            ->paginate(15)
+            ->withQueryString();
+
+        return view('assessment.results.index', [
+            'periods' => $periods,
+            'selectedPeriod' => $selectedPeriod,
+            'results' => $results,
+            'isSupervisor' => $request->user()->hasRole('supervisor'),
+        ]);
+    }
+
     public function show(Request $request, AssessmentAssignment $assignment): View|RedirectResponse
     {
         $this->authorizeAssignment($request, $assignment);
@@ -123,6 +159,10 @@ class AssessmentFormController extends Controller
                     'title' => 'Assessment Submitted',
                     'message' => "{$assignment->assessor->name} submitted {$assignment->assessor_type} assessment for {$assignment->assessee->name}.",
                     'type' => 'assessment_reminder',
+                    'destination_url' => route('assessment-cycle.assign-assessors.index', [
+                        'assessment_period_id' => $assignment->assessment_period_id,
+                        'status' => 'submitted',
+                    ], false),
                 ]);
             });
 

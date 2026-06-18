@@ -77,29 +77,36 @@ class ReportsModuleTest extends TestCase
             ->assertSee('CSV');
     }
 
-    public function test_unavailable_excel_and_pdf_exports_record_failed_activity(): void
+    public function test_excel_and_pdf_exports_are_real_filtered_downloads_and_record_activity(): void
     {
         $user = User::factory()->create(['role' => 'admin_hr']);
+        $fixture = $this->fixture();
+        $included = $this->employee($fixture['department'], $fixture['position'], 'EMP-XLSX-001', 'Included Export');
+        $excluded = $this->employee($fixture['otherDepartment'], $fixture['position'], 'EMP-XLSX-002', 'Excluded Export');
+        $this->assessmentResult($fixture['period'], $included, 4.10, 'Baik');
+        $this->assessmentResult($fixture['period'], $excluded, 2.50, 'Perlu Pengembangan');
 
-        $this->actingAs($user)
-            ->get('/reports/export/excel')
-            ->assertRedirect()
-            ->assertSessionHas('warning');
+        $excel = $this->actingAs($user)
+            ->get("/reports/export/excel?period_id={$fixture['period']->id}&department_id={$fixture['department']->id}")
+            ->assertOk()
+            ->assertDownload();
+        $this->assertStringStartsWith('PK', file_get_contents($excel->baseResponse->getFile()->getPathname()));
 
-        $this->actingAs($user)
-            ->get('/reports/export/pdf')
-            ->assertRedirect()
-            ->assertSessionHas('warning');
+        $pdf = $this->actingAs($user)
+            ->get("/reports/export/pdf?period_id={$fixture['period']->id}&department_id={$fixture['department']->id}")
+            ->assertOk()
+            ->assertDownload();
+        $this->assertStringStartsWith('%PDF', $pdf->getContent());
 
         $this->assertDatabaseHas('report_exports', [
             'user_id' => $user->id,
             'report_type' => 'excel',
-            'status' => 'failed',
+            'status' => 'generated',
         ]);
         $this->assertDatabaseHas('report_exports', [
             'user_id' => $user->id,
             'report_type' => 'pdf',
-            'status' => 'failed',
+            'status' => 'generated',
         ]);
     }
 

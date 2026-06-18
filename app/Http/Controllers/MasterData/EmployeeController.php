@@ -17,6 +17,12 @@ class EmployeeController extends Controller
 {
     public function index(Request $request): View
     {
+        $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
+            'employment_status' => ['nullable', Rule::in(['active', 'inactive'])],
+        ]);
+
         $employees = Employee::query()
             ->with(['department', 'position', 'supervisor', 'user'])
             ->search($request->string('search')->toString())

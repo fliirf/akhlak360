@@ -15,6 +15,19 @@
 @section('content')
     @include('partials.flash')
 
+    @if (! $activePeriod)
+        <div class="alert alert-warning">
+            Tidak ada periode aktif. Proposal peer baru dinonaktifkan sampai Admin HR mengaktifkan periode.
+            @if(auth()->user()->hasRole('admin_hr'))<a href="{{ route('assessment-cycle.periods.create') }}" class="btn btn-sm btn-warning ml-2">Buat Periode</a>@endif
+        </div>
+    @endif
+
+    <div class="row">
+        <div class="col-lg-4 col-6"><x-adminlte-small-box title="{{ $summary['pending'] }}" text="Pending" icon="fas fa-hourglass-half" theme="warning"/></div>
+        <div class="col-lg-4 col-6"><x-adminlte-small-box title="{{ $summary['approved'] }}" text="Approved" icon="fas fa-check-circle" theme="success"/></div>
+        <div class="col-lg-4 col-12"><x-adminlte-small-box title="{{ $summary['rejected'] }}" text="Rejected" icon="fas fa-times-circle" theme="danger"/></div>
+    </div>
+
     @if (auth()->user()->hasRole('admin_hr'))
         <x-adminlte-card title="Propose Peer Assessor" theme="primary" icon="fas fa-user-plus">
             <form method="POST" action="{{ route('assessment-cycle.peer-approval.store') }}">
@@ -74,7 +87,7 @@
                         </div>
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class="btn btn-primary" @disabled(! $activePeriod)>
                     <i class="fas fa-paper-plane mr-1"></i> Propose Peer
                 </button>
             </form>

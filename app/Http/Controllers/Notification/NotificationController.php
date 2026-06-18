@@ -8,18 +8,41 @@ use App\Models\AuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class NotificationController extends Controller
 {
     public function index(Request $request): View
     {
-        $notifications = $request->user()
-            ->notifications()
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'status' => ['nullable', Rule::in(['read', 'unread'])],
+            'type' => ['nullable', Rule::in(['assessment_reminder', 'system', 'result', 'idp'])],
+        ]);
+        $baseQuery = $request->user()->notifications();
+        $notifications = (clone $baseQuery)
+            ->when(($validated['status'] ?? null) === 'read', fn ($query) => $query->whereNotNull('read_at'))
+            ->when(($validated['status'] ?? null) === 'unread', fn ($query) => $query->unread())
+            ->when($validated['type'] ?? null, fn ($query, $type) => $query->type($type))
+            ->when($validated['search'] ?? null, fn ($query, $search) => $query->where(function ($query) use ($search) {
+                $query->where('title', 'like', '%'.$search.'%')
+                    ->orWhere('message', 'like', '%'.$search.'%');
+            }))
             ->latest()
-            ->paginate(15);
+            ->paginate(15)
+            ->withQueryString();
 
-        return view('notifications.index', compact('notifications'));
+        return view('notifications.index', [
+            'notifications' => $notifications,
+            'summary' => [
+                'total' => (clone $baseQuery)->count(),
+                'unread' => (clone $baseQuery)->unread()->count(),
+                'reminders' => (clone $baseQuery)->type('assessment_reminder')->count(),
+                'results' => (clone $baseQuery)->whereIn('type', ['result', 'idp'])->count(),
+            ],
+            'types' => ['assessment_reminder', 'system', 'result', 'idp'],
+        ]);
     }
 
     public function navbar(Request $request): JsonResponse
@@ -53,7 +76,18 @@ class NotificationController extends Controller
 
         $this->audit($request, 'mark_read', "Marked notification #{$notification->id} as read.");
 
-        return back()->with('success', 'Notification marked as read.');
+        $destination = $this->safeDestination($notification->destination_url);
+
+        return redirect($destination)->with('success', 'Notification marked as read.');
+    }
+
+    private function safeDestination(?string $destination): string
+    {
+        if (! $destination || ! str_starts_with($destination, '/') || str_starts_with($destination, '//')) {
+            return route('notifications.index', absolute: false);
+        }
+
+        return $destination;
     }
 
     public function markAllAsRead(Request $request): RedirectResponse

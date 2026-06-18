@@ -14,14 +14,27 @@
 @stop
 
 @section('content')
+    @if (! auth()->user()->employee)
+        <div class="alert alert-warning">Akun supervisor belum terhubung ke profil pegawai. Hubungi Admin HR.</div>
+    @elseif (! $activePeriod)
+        <div class="alert alert-info">Belum ada periode penilaian aktif.</div>
+    @endif
     <div class="row">
         <div class="col-lg-2 col-6"><x-adminlte-small-box title="{{ $stats['teamMembers'] }}" text="Team Members" icon="fas fa-users" theme="primary"/></div>
         <div class="col-lg-2 col-6"><x-adminlte-small-box title="{{ $stats['completionRate'] }}%" text="Team Completion" icon="fas fa-tasks" theme="success"/></div>
         <div class="col-lg-2 col-6"><x-adminlte-small-box title="{{ $stats['pendingApprovals'] }}" text="Pending Approvals" icon="fas fa-user-check" theme="warning"/></div>
         <div class="col-lg-2 col-6"><x-adminlte-small-box title="{{ $stats['pendingAssessments'] }}" text="My Pending Assessments" icon="fas fa-edit" theme="info"/></div>
+        <div class="col-lg-2 col-6"><x-adminlte-small-box title="{{ $stats['submittedAssessments'] }}" text="Submitted Assessments" icon="fas fa-check" theme="success"/></div>
         <div class="col-lg-2 col-6"><x-adminlte-small-box title="{{ $stats['teamAverageScore'] ?? '-' }}" text="Team Avg Score" icon="fas fa-star" theme="primary"/></div>
         <div class="col-lg-2 col-6"><x-adminlte-small-box title="{{ $stats['belowThreshold'] }}" text="Below Threshold" icon="fas fa-exclamation-triangle" theme="danger"/></div>
     </div>
+
+    <x-adminlte-card title="Hasil Penilaian Tim Terbaru" theme="secondary" icon="fas fa-history">
+        <div class="table-responsive"><table class="table table-striped mb-0">
+            <thead><tr><th>Pegawai</th><th>Departemen</th><th class="text-right">Skor Akhir</th><th>Kategori</th></tr></thead>
+            <tbody>@forelse($recentTeamResults as $teamResult)<tr><td>{{ $teamResult->employee?->name ?? '-' }}</td><td>{{ $teamResult->employee?->department?->name ?? '-' }}</td><td class="text-right">{{ number_format((float) $teamResult->final_score, 2) }}</td><td><span class="badge badge-info">{{ $teamResult->category ?? '-' }}</span></td></tr>@empty<tr><td colspan="4" class="text-center text-muted">Belum ada hasil penilaian tim.</td></tr>@endforelse</tbody>
+        </table></div>
+    </x-adminlte-card>
 
     <div class="row">
         <div class="col-lg-7">
@@ -58,7 +71,7 @@
 
 @section('js')
     <script>
-        const teamCoreValueData = @json($coreValueChart);
+        const teamCoreValueData = {{ Illuminate\Support\Js::from($coreValueChart) }};
         if (document.getElementById('teamCoreValueChart')) {
             new Chart(document.getElementById('teamCoreValueChart'), {
                 type: 'bar',

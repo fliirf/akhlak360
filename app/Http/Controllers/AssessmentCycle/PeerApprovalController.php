@@ -10,12 +10,17 @@ use App\Models\Employee;
 use App\Models\PeerApproval;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class PeerApprovalController extends Controller
 {
     public function index(Request $request): View
     {
+        $request->validate([
+            'status' => ['nullable', Rule::in(['pending', 'approved', 'rejected'])],
+            'assessment_period_id' => ['nullable', 'integer', 'exists:assessment_periods,id'],
+        ]);
         $query = PeerApproval::query()
             ->with(['assessmentPeriod', 'employee.department', 'peerEmployee', 'supervisorEmployee'])
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->status))
@@ -40,6 +45,11 @@ class PeerApprovalController extends Controller
             'periods' => AssessmentPeriod::orderByDesc('year')->orderByDesc('start_date')->get(),
             'activePeriod' => AssessmentPeriod::active()->first(),
             'employees' => Employee::active()->with(['department', 'supervisor'])->orderBy('name')->get(),
+            'summary' => [
+                'pending' => (clone $query)->pending()->count(),
+                'approved' => (clone $query)->where('status', 'approved')->count(),
+                'rejected' => (clone $query)->where('status', 'rejected')->count(),
+            ],
         ]);
     }
 

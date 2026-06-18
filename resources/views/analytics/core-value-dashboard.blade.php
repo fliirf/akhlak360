@@ -129,7 +129,7 @@
 @section('js')
     @if ($hasData)
         <script>
-            const coreValueChartData = @json($coreValueChart);
+            const coreValueChartData = {{ Illuminate\Support\Js::from($coreValueChart) }};
 
             if (document.getElementById('coreValueBarChart')) {
                 new Chart(document.getElementById('coreValueBarChart'), {

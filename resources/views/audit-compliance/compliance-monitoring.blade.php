@@ -23,6 +23,13 @@
 @section('content')
     @include('partials.flash')
 
+    @if (! $period)
+        <div class="alert alert-warning">
+            Belum ada periode penilaian. Monitoring compliance akan tersedia setelah periode dan assignment dibuat.
+            @if(auth()->user()->hasRole('admin_hr'))<a href="{{ route('assessment-cycle.periods.create') }}" class="btn btn-sm btn-warning ml-2">Buat Periode</a>@endif
+        </div>
+    @endif
+
     <x-adminlte-card title="Period Filter" theme="primary" icon="fas fa-filter">
         <form method="GET" action="{{ route('audit-compliance.compliance-monitoring.index') }}">
             <div class="row">
@@ -42,6 +49,7 @@
                     </button>
                 </div>
             </div>
+            <a href="{{ route('audit-compliance.compliance-monitoring.index') }}" class="btn btn-sm btn-outline-secondary mt-2">Reset Filters</a>
         </form>
     </x-adminlte-card>
 

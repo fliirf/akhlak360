@@ -150,4 +150,34 @@ class AssessmentCycleCrudTest extends TestCase
         ]);
         $this->assertDatabaseHas('audit_logs', ['module' => 'assessment_weights', 'action' => 'update']);
     }
+
+    public function test_admin_can_explicitly_close_period_and_action_is_audited(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin_hr']);
+        $period = AssessmentPeriod::create([
+            'name' => 'Closable Period',
+            'semester' => 'Semester 1',
+            'year' => 2026,
+            'start_date' => '2026-06-01',
+            'end_date' => '2026-06-14',
+            'status' => 'active',
+            'threshold_score' => 3,
+        ]);
+
+        $this->actingAs($admin)
+            ->patch("/assessment-cycle/periods/{$period->id}/close")
+            ->assertRedirect('/assessment-cycle/periods')
+            ->assertSessionHas('success');
+
+        $this->assertSame('closed', $period->fresh()->status);
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $admin->id,
+            'module' => 'assessment_periods',
+            'action' => 'close',
+        ]);
+
+        $this->actingAs(User::factory()->create(['role' => 'employee']))
+            ->patch("/assessment-cycle/periods/{$period->id}/close")
+            ->assertForbidden();
+    }
 }

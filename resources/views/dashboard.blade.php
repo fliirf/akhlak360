@@ -110,27 +110,14 @@
             </x-adminlte-card>
         </div>
         <div class="col-lg-5">
-            <x-adminlte-card title="Aksi Cepat" theme="secondary" icon="fas fa-bolt">
-                <form>
-                    <div class="form-group">
-                        <label for="assessment_period">Periode Penilaian</label>
-                        <select id="assessment_period" name="assessment_period" class="form-control">
-                            <option>Semester I 2026</option>
-                            <option>Semester II 2026</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="unit">Unit Kerja</label>
-                        <input id="unit" name="unit" type="text" class="form-control" placeholder="Cari unit kerja...">
-                    </div>
-                    <div class="form-group">
-                        <label for="notes">Catatan Monitoring</label>
-                        <textarea id="notes" name="notes" class="form-control" rows="3" placeholder="Tuliskan catatan tindak lanjut singkat..."></textarea>
-                    </div>
-                    <button type="button" class="btn btn-primary">
-                        <i class="fas fa-save mr-1"></i> Simpan Catatan
-                    </button>
-                </form>
+            <x-adminlte-card title="Akses Cepat" theme="secondary" icon="fas fa-bolt">
+                <p class="text-muted">Gunakan halaman fungsional berikut untuk menindaklanjuti hasil penilaian.</p>
+                <a href="{{ route('notifications.index') }}" class="btn btn-primary mr-2">
+                    <i class="fas fa-bell mr-1"></i> Notifikasi
+                </a>
+                <a href="{{ route('profile.edit') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-user-cog mr-1"></i> Profil
+                </a>
             </x-adminlte-card>
         </div>
     </div>

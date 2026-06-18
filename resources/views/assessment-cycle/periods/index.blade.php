@@ -36,6 +36,7 @@
                     </button>
                 </div>
             </div>
+            <a href="{{ route('assessment-cycle.periods.index') }}" class="btn btn-sm btn-outline-secondary mt-2">Reset Filters</a>
         </form>
 
         <div class="table-responsive">
@@ -74,6 +75,16 @@
                                         <i class="fas fa-calculator"></i>
                                     </button>
                                 </form>
+                                @if ($period->status !== 'closed')
+                                    <form method="POST" action="{{ route('assessment-cycle.periods.close', $period) }}" class="d-inline"
+                                        onsubmit="return confirm('Close this period? Results will be recalculated first.');">
+                                        @csrf
+                                        @method('PATCH')
+                                        <button type="submit" class="btn btn-sm btn-dark" title="Close Period">
+                                            <i class="fas fa-lock"></i>
+                                        </button>
+                                    </form>
+                                @endif
                                 <a href="{{ route('assessment-cycle.periods.edit', $period) }}" class="btn btn-sm btn-warning">
                                     <i class="fas fa-edit"></i>
                                 </a>

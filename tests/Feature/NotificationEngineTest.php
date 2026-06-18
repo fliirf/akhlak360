@@ -106,6 +106,37 @@ class NotificationEngineTest extends TestCase
             ->assertJsonFragment(['icon_color' => 'warning']);
     }
 
+    public function test_notification_click_marks_read_and_redirects_only_to_safe_internal_destination(): void
+    {
+        $user = User::factory()->create(['role' => 'employee']);
+        $notification = AppNotification::create([
+            'user_id' => $user->id,
+            'title' => 'Open assessment',
+            'message' => 'Complete the pending assessment.',
+            'type' => 'assessment_reminder',
+            'destination_url' => '/assessment/pending',
+        ]);
+
+        $this->actingAs($user)
+            ->patch("/notifications/{$notification->id}/read")
+            ->assertRedirect('/assessment/pending')
+            ->assertSessionHas('success');
+
+        $this->assertNotNull($notification->fresh()->read_at);
+
+        $unsafe = AppNotification::create([
+            'user_id' => $user->id,
+            'title' => 'Unsafe',
+            'message' => 'Unsafe redirect attempt.',
+            'type' => 'system',
+            'destination_url' => 'https://example.com',
+        ]);
+
+        $this->actingAs($user)
+            ->patch("/notifications/{$unsafe->id}/read")
+            ->assertRedirect('/notifications');
+    }
+
     private function assessmentFixture(string $startDate): array
     {
         $assessorUser = User::factory()->create([

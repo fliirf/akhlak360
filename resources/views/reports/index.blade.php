@@ -48,27 +48,34 @@
                 </div>
             </div>
             <div class="d-flex flex-wrap justify-content-between align-items-center mt-3">
-                <button class="btn btn-primary" type="submit">
-                    <i class="fas fa-search mr-1"></i> Apply Filters
-                </button>
+                <div>
+                    <button class="btn btn-primary" type="submit">
+                        <i class="fas fa-search mr-1"></i> Apply Filters
+                    </button>
+                    <a href="{{ route('reports.export.index') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-undo mr-1"></i> Reset
+                    </a>
+                </div>
                 <div class="btn-group mt-2 mt-md-0">
                     <a href="{{ route('reports.export.csv', request()->query()) }}" class="btn btn-success">
                         <i class="fas fa-file-csv mr-1"></i> CSV
                     </a>
-                    <a href="{{ $excelAvailable ? route('reports.export.excel', request()->query()) : '#' }}"
-                        class="btn btn-outline-success {{ $excelAvailable ? '' : 'disabled' }}"
-                        @if (! $excelAvailable) aria-disabled="true" title="Install maatwebsite/excel to enable Excel export" @endif>
+                    <a href="{{ route('reports.export.excel', request()->query()) }}" class="btn btn-outline-success">
                         <i class="fas fa-file-excel mr-1"></i> Excel
                     </a>
-                    <a href="{{ $pdfAvailable ? route('reports.export.pdf', request()->query()) : '#' }}"
-                        class="btn btn-outline-danger {{ $pdfAvailable ? '' : 'disabled' }}"
-                        @if (! $pdfAvailable) aria-disabled="true" title="Install barryvdh/laravel-dompdf to enable PDF export" @endif>
+                    <a href="{{ route('reports.export.pdf', request()->query()) }}" class="btn btn-outline-danger">
                         <i class="fas fa-file-pdf mr-1"></i> PDF
                     </a>
                 </div>
             </div>
         </form>
     </x-adminlte-card>
+
+    <div class="row">
+        <div class="col-lg-4 col-6"><x-adminlte-small-box title="{{ $summary['records'] }}" text="Record Laporan" icon="fas fa-list" theme="primary"/></div>
+        <div class="col-lg-4 col-6"><x-adminlte-small-box title="{{ number_format($summary['averageScore'], 2) }}" text="Rata-rata Skor" icon="fas fa-star" theme="info"/></div>
+        <div class="col-lg-4 col-12"><x-adminlte-small-box title="{{ $summary['belowThreshold'] }}" text="Di Bawah Threshold" icon="fas fa-exclamation-triangle" theme="danger"/></div>
+    </div>
 
     <x-adminlte-card title="Report Preview" theme="success" icon="fas fa-table">
         <div class="table-responsive">
@@ -96,7 +103,7 @@
                             </td>
                             <td>{{ $result->employee?->department?->name ?? '-' }}</td>
                             <td>{{ $result->employee?->position?->name ?? '-' }}</td>
-                            <td class="text-right">{{ $result->final_score }}</td>
+                            <td class="text-right">{{ number_format((float) $result->final_score, 2) }}</td>
                             <td><span class="badge badge-info">{{ $result->category }}</span></td>
                             <td>{{ $result->talent_mapping_category ?? '-' }}</td>
                             <td>{{ $idp?->weakest_core_value ?? '-' }}</td>

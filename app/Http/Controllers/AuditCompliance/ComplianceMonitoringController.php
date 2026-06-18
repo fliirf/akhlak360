@@ -10,19 +10,29 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ComplianceMonitoringController extends Controller
 {
     public function index(Request $request): View
     {
+        $validated = $request->validate([
+            'period_id' => ['nullable', 'integer', Rule::exists('assessment_periods', 'id')],
+        ]);
         $periods = AssessmentPeriod::orderByDesc('year')->orderByDesc('start_date')->get();
-        $selectedPeriod = $request->integer('period_id') ?: optional($periods->firstWhere('status', 'active'))->id;
+        $selectedPeriod = isset($validated['period_id'])
+            ? (int) $validated['period_id']
+            : ($periods->firstWhere('status', 'active') ?? $periods->first())?->id;
         $period = $selectedPeriod ? AssessmentPeriod::find($selectedPeriod) : null;
 
         $assignmentQuery = AssessmentAssignment::query()
             ->with(['assessmentPeriod', 'assessor.user', 'assessee.department'])
-            ->when($selectedPeriod, fn (Builder $query) => $query->where('assessment_period_id', $selectedPeriod));
+            ->when(
+                $selectedPeriod,
+                fn (Builder $query) => $query->where('assessment_period_id', $selectedPeriod),
+                fn (Builder $query) => $query->whereRaw('1 = 0')
+            );
 
         $total = (clone $assignmentQuery)->count();
         $submitted = (clone $assignmentQuery)->submitted()->count();

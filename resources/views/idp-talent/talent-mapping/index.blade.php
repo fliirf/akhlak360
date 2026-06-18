@@ -8,9 +8,11 @@
             <h1 class="m-0">Talent Mapping</h1>
             <p class="text-muted mb-0">Mapping talenta berdasarkan hasil AKHLAK 360 dan gap score.</p>
         </div>
-        <a href="{{ route('idp-talent.talent-mapping.export', request()->only(['period_id', 'department_id'])) }}" class="btn btn-success mt-3 mt-md-0">
-            <i class="fas fa-file-csv mr-1"></i> Export CSV
-        </a>
+        @if ($canExport)
+            <a href="{{ route('idp-talent.talent-mapping.export', request()->only(['period_id', 'department_id'])) }}" class="btn btn-success mt-3 mt-md-0">
+                <i class="fas fa-file-csv mr-1"></i> Export CSV
+            </a>
+        @endif
     </div>
     @include('partials.breadcrumbs')
 @stop
@@ -43,6 +45,7 @@
                     </button>
                 </div>
             </div>
+            <a href="{{ route('idp-talent.talent-mapping.index') }}" class="btn btn-sm btn-outline-secondary mt-2">Reset Filters</a>
         </form>
     </x-adminlte-card>
 
@@ -95,8 +98,8 @@
                                 <tr>
                                     <td>{{ $result->employee?->name ?? '-' }}</td>
                                     <td>{{ $result->employee?->department?->name ?? '-' }}</td>
-                                    <td class="text-right">{{ $result->final_score }}</td>
-                                    <td class="text-right">{{ $result->gap_score }}</td>
+                                    <td class="text-right">{{ number_format((float) $result->final_score, 2) }}</td>
+                                    <td class="text-right">{{ number_format((float) $result->gap_score, 2) }}</td>
                                     <td><span class="badge badge-{{ $categoryTheme }}">{{ $result->talent_mapping_category }}</span></td>
                                     <td>
                                         @if ($idpStatus)
@@ -127,7 +130,7 @@
 
 @section('js')
     <script>
-        const categoryChartData = @json($categoryChart);
+        const categoryChartData = {{ Illuminate\Support\Js::from($categoryChart) }};
 
         if (document.getElementById('talentCategoryChart')) {
             new Chart(document.getElementById('talentCategoryChart'), {

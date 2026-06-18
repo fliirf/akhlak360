@@ -13,11 +13,15 @@ class PositionController extends Controller
 {
     public function index(Request $request): View
     {
+        $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+        ]);
+
         $positions = Position::query()
             ->withCount('employees')
-            ->when($request->filled('search'), fn ($query) => $query
+            ->when($request->filled('search'), fn ($query) => $query->where(fn ($query) => $query
                 ->where('name', 'like', '%'.$request->search.'%')
-                ->orWhere('level', 'like', '%'.$request->search.'%'))
+                ->orWhere('level', 'like', '%'.$request->search.'%')))
             ->orderBy('name')
             ->paginate(10)
             ->withQueryString();

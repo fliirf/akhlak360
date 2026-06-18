@@ -38,13 +38,19 @@ class AkhlakDemoSeeder extends Seeder
         $departments = $this->seedDepartments();
         $positions = $this->seedPositions();
         $employees = $this->seedEmployees($users, $departments, $positions);
+        $historicalPeriod = $this->seedHistoricalAssessmentPeriod();
         $period = $this->seedAssessmentPeriod();
 
+        $this->seedWeights($historicalPeriod);
         $this->seedWeights($period);
         $this->seedPeerApprovals($period, $employees);
+        $historicalAssignments = $this->seedAssignments($historicalPeriod, $employees);
         $assignments = $this->seedAssignments($period, $employees);
+        $this->seedResponses($historicalAssignments);
         $this->seedResponses($assignments);
-        $this->seedResults($period, $employees);
+        $this->seedResults($historicalPeriod, $employees, 1);
+        $this->seedResults($period, $employees, 0);
+        $this->seedIdpRecommendations($historicalPeriod, $employees);
         $this->seedIdpRecommendations($period, $employees);
         $this->seedNotifications($users, $period);
         $this->seedAuditLogs($users);
@@ -113,7 +119,7 @@ class AkhlakDemoSeeder extends Seeder
     }
 
     /**
-     * @param array<string, User> $users
+     * @param  array<string, User>  $users
      * @return Collection<int, Employee>
      */
     private function seedEmployees(array $users, Collection $departments, Collection $positions): Collection
@@ -181,6 +187,19 @@ class AkhlakDemoSeeder extends Seeder
             'start_date' => $startDate,
             'end_date' => $startDate->copy()->addDays(13),
             'status' => 'active',
+            'threshold_score' => 3.00,
+        ]);
+    }
+
+    private function seedHistoricalAssessmentPeriod(): AssessmentPeriod
+    {
+        return AssessmentPeriod::create([
+            'name' => 'Semester 2 2025',
+            'semester' => 'Semester 2',
+            'year' => 2025,
+            'start_date' => Carbon::create(2025, 11, 1),
+            'end_date' => Carbon::create(2025, 11, 14),
+            'status' => 'closed',
             'threshold_score' => 3.00,
         ]);
     }
@@ -300,17 +319,21 @@ class AkhlakDemoSeeder extends Seeder
         }
     }
 
-    private function seedResults(AssessmentPeriod $period, Collection $employees): void
+    private function seedResults(AssessmentPeriod $period, Collection $employees, int $periodOffset): void
     {
+        $finalScores = [2.55, 2.75, 2.92, 3.05, 3.18, 3.32, 3.48, 3.62, 3.78, 3.92, 4.08, 4.22, 4.38, 4.52, 4.68, 3.26, 3.71, 4.02, 2.86, 4.44];
+        $gapScores = [0.80, -0.75, 0.15, 0.55, -0.20, -0.60, 0.35, 0.05];
+
         foreach ($employees as $index => $employee) {
+            $baseFinal = $finalScores[($index + $periodOffset * 3) % count($finalScores)];
+            $finalScore = round(max(1, min(5, $baseFinal - ($periodOffset * 0.18))), 2);
+            $gapScore = $gapScores[($index + $periodOffset) % count($gapScores)];
+            $othersScore = round(max(1, min(5, $finalScore - 0.04)), 2);
+            $selfScore = round(max(1, min(5, $othersScore + $gapScore)), 2);
             $scores = collect(array_keys(self::CORE_VALUES))
                 ->mapWithKeys(fn (string $value, int $coreIndex) => [
-                    strtolower($value).'_score' => round(3.15 + (($index + $coreIndex) % 8) / 10, 2),
+                    strtolower($value).'_score' => round(max(1, min(5, $finalScore + ((($index + $coreIndex) % 5) - 2) * 0.12)), 2),
                 ]);
-
-            $selfScore = round(3.30 + ($index % 6) / 10, 2);
-            $othersScore = round(3.10 + (($index + 2) % 7) / 10, 2);
-            $finalScore = round(($selfScore * 0.10) + ($othersScore * 0.90), 2);
 
             AssessmentResult::create([
                 'assessment_period_id' => $period->id,
@@ -318,10 +341,20 @@ class AkhlakDemoSeeder extends Seeder
                 ...$scores->all(),
                 'self_score' => $selfScore,
                 'others_score' => $othersScore,
-                'gap_score' => round($selfScore - $othersScore, 2),
+                'gap_score' => $gapScore,
                 'final_score' => $finalScore,
-                'category' => $finalScore >= 3.75 ? 'Unggul' : ($finalScore >= 3.00 ? 'Baik' : 'Perlu Pengembangan'),
-                'talent_mapping_category' => $finalScore >= 3.75 ? 'High Potential' : ($finalScore >= 3.25 ? 'Solid Performer' : 'Development Focus'),
+                'category' => match (true) {
+                    $finalScore < 3.00 => 'Perlu Pengembangan',
+                    $finalScore < 3.75 => 'Cukup',
+                    $finalScore < 4.50 => 'Baik',
+                    default => 'Sangat Baik',
+                },
+                'talent_mapping_category' => match (true) {
+                    $finalScore >= 4.50 && $gapScore >= -0.50 && $gapScore <= 0.50 => 'High Potential',
+                    $finalScore >= 3.75 => 'Solid Contributor',
+                    $finalScore >= 3.00 => 'Core Contributor',
+                    default => 'Need Development',
+                },
             ]);
         }
     }
@@ -344,16 +377,16 @@ class AkhlakDemoSeeder extends Seeder
     }
 
     /**
-     * @param array<string, User> $users
+     * @param  array<string, User>  $users
      */
     private function seedNotifications(array $users, AssessmentPeriod $period): void
     {
         $notifications = [
-            ['user' => 'admin_hr', 'title' => 'Periode aktif', 'type' => 'system', 'message' => $period->name.' telah aktif untuk seluruh pegawai.'],
-            ['user' => 'supervisor', 'title' => 'Persetujuan peer reviewer', 'type' => 'assessment_reminder', 'message' => 'Silakan pantau progres penilaian tim Anda.'],
-            ['user' => 'employee', 'title' => 'Form penilaian tersedia', 'type' => 'assessment_reminder', 'message' => 'Anda memiliki form self assessment dan peer review yang perlu diselesaikan.'],
-            ['user' => 'management', 'title' => 'Dashboard manajemen siap', 'type' => 'result', 'message' => 'Ringkasan skor AKHLAK semester ini sudah tersedia.'],
-            ['user' => 'it_admin', 'title' => 'Sinkronisasi HRIS selesai', 'type' => 'system', 'message' => 'Import CSV demo berhasil diproses.'],
+            ['user' => 'admin_hr', 'title' => 'Periode aktif', 'type' => 'system', 'message' => $period->name.' telah aktif untuk seluruh pegawai.', 'destination_url' => '/assessment-cycle/periods'],
+            ['user' => 'supervisor', 'title' => 'Persetujuan peer reviewer', 'type' => 'assessment_reminder', 'message' => 'Silakan pantau progres penilaian tim Anda.', 'destination_url' => '/assessment-cycle/peer-approval'],
+            ['user' => 'employee', 'title' => 'Form penilaian tersedia', 'type' => 'assessment_reminder', 'message' => 'Anda memiliki form self assessment dan peer review yang perlu diselesaikan.', 'destination_url' => '/assessment/pending'],
+            ['user' => 'management', 'title' => 'Dashboard manajemen siap', 'type' => 'result', 'message' => 'Ringkasan skor AKHLAK semester ini sudah tersedia.', 'destination_url' => '/management/dashboard'],
+            ['user' => 'it_admin', 'title' => 'Sinkronisasi HRIS selesai', 'type' => 'system', 'message' => 'Import CSV demo berhasil diproses.', 'destination_url' => '/master-data/hris-sync'],
         ];
 
         foreach ($notifications as $index => $notification) {
@@ -362,13 +395,14 @@ class AkhlakDemoSeeder extends Seeder
                 'title' => $notification['title'],
                 'message' => $notification['message'],
                 'type' => $notification['type'],
+                'destination_url' => $notification['destination_url'],
                 'read_at' => $index % 2 === 0 ? null : now()->subHours($index),
             ]);
         }
     }
 
     /**
-     * @param array<string, User> $users
+     * @param  array<string, User>  $users
      */
     private function seedAuditLogs(array $users): void
     {
@@ -394,7 +428,7 @@ class AkhlakDemoSeeder extends Seeder
     }
 
     /**
-     * @param array<string, User> $users
+     * @param  array<string, User>  $users
      */
     private function seedHrisSyncLogs(array $users): void
     {

@@ -9,6 +9,12 @@
 @stop
 
 @section('content')
+    <div class="row">
+        <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $summary['total'] }}" text="Log Terfilter" icon="fas fa-list" theme="primary"/></div>
+        <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $summary['users'] }}" text="Pengguna Unik" icon="fas fa-users" theme="info"/></div>
+        <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $summary['system'] }}" text="Aktivitas Sistem" icon="fas fa-cog" theme="secondary"/></div>
+        <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $summary['today'] }}" text="Hari Ini" icon="fas fa-calendar-day" theme="success"/></div>
+    </div>
     <x-adminlte-card title="Filters" theme="primary" icon="fas fa-filter">
         <form method="GET" action="{{ route('audit-compliance.audit-logs.index') }}">
             <div class="row">
@@ -45,6 +51,7 @@
                     </button>
                 </div>
             </div>
+            <a href="{{ route('audit-compliance.audit-logs.index') }}" class="btn btn-sm btn-outline-secondary mt-2">Reset Filters</a>
         </form>
     </x-adminlte-card>
 

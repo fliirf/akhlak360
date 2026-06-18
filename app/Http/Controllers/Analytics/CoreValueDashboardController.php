@@ -9,6 +9,7 @@ use App\Models\Department;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class CoreValueDashboardController extends Controller
@@ -24,14 +25,18 @@ class CoreValueDashboardController extends Controller
 
     public function index(Request $request): View
     {
+        $validated = $request->validate([
+            'period_id' => ['nullable', 'integer', Rule::exists('assessment_periods', 'id')],
+            'department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')->where('is_active', true)],
+        ]);
         $periods = AssessmentPeriod::orderByDesc('year')
             ->orderByDesc('start_date')
             ->get();
         $departments = Department::active()->orderBy('name')->get();
 
         $defaultPeriod = $periods->firstWhere('status', 'active') ?? $periods->first();
-        $selectedPeriod = $request->integer('period_id') ?: $defaultPeriod?->id;
-        $selectedDepartment = $request->integer('department_id') ?: null;
+        $selectedPeriod = isset($validated['period_id']) ? (int) $validated['period_id'] : $defaultPeriod?->id;
+        $selectedDepartment = isset($validated['department_id']) ? (int) $validated['department_id'] : null;
 
         $resultQuery = AssessmentResult::query()
             ->with(['employee.department', 'assessmentPeriod'])

@@ -16,6 +16,23 @@
 @stop
 
 @section('content')
+    @if (! $activePeriod)
+        <div class="alert alert-warning">
+            <h5><i class="icon fas fa-calendar-times"></i> Tidak ada periode aktif</h5>
+            Aktifkan atau buat periode agar statistik dashboard tidak mencampur data lintas periode.
+            <a class="btn btn-sm btn-warning ml-2" href="{{ route('assessment-cycle.periods.create') }}">Buat Periode</a>
+        </div>
+    @elseif (! $hasAssignments)
+        <div class="alert alert-info">
+            Periode aktif belum memiliki assignment.
+            <a class="btn btn-sm btn-info ml-2" href="{{ route('assessment-cycle.assign-assessors.index') }}">Generate Assignment</a>
+        </div>
+    @elseif (! $hasResults)
+        <div class="alert alert-info">
+            Assignment tersedia, tetapi hasil belum dikalkulasikan.
+            <form class="d-inline ml-2" method="POST" action="{{ route('assessment-cycle.periods.recalculate', $activePeriod) }}">@csrf<button type="submit" class="btn btn-sm btn-info">Kalkulasi Ulang Hasil</button></form>
+        </div>
+    @endif
     <div class="row">
         <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $stats['totalEmployees'] }}" text="Total Employees" icon="fas fa-users" theme="primary"/></div>
         <div class="col-lg-3 col-6"><x-adminlte-small-box title="{{ $stats['totalAssignments'] }}" text="Total Assignments" icon="fas fa-clipboard-list" theme="info"/></div>
@@ -74,8 +91,8 @@
 
 @section('js')
     <script>
-        const coreValueData = @json($coreValueChart);
-        const completionData = @json($completionChart);
+        const coreValueData = {{ Illuminate\Support\Js::from($coreValueChart) }};
+        const completionData = {{ Illuminate\Support\Js::from($completionChart) }};
 
         if (document.getElementById('coreValueChart')) {
             new Chart(document.getElementById('coreValueChart'), {

@@ -36,6 +36,7 @@
                     </button>
                 </div>
             </div>
+            <a href="{{ route('analytics.gap-analysis.index') }}" class="btn btn-sm btn-outline-secondary mt-2">Reset Filters</a>
         </form>
     </x-adminlte-card>
 
@@ -88,22 +89,14 @@
                 </thead>
                 <tbody>
                     @forelse ($results as $result)
-                        @php
-                            $gap = (float) $result->gap_score;
-                            $interpretation = $gap > 0.50
-                                ? ['label' => 'Self rating higher than others', 'theme' => 'warning']
-                                : ($gap < -0.50
-                                    ? ['label' => 'Self rating lower than others', 'theme' => 'danger']
-                                    : ['label' => 'Aligned', 'theme' => 'success']);
-                        @endphp
                         <tr>
                             <td>{{ $result->employee?->employee_number ?? '-' }}</td>
                             <td>{{ $result->employee?->name ?? '-' }}</td>
                             <td>{{ $result->employee?->department?->name ?? '-' }}</td>
-                            <td class="text-right">{{ $result->self_score }}</td>
-                            <td class="text-right">{{ $result->others_score }}</td>
-                            <td class="text-right">{{ $result->gap_score }}</td>
-                            <td><span class="badge badge-{{ $interpretation['theme'] }}">{{ $interpretation['label'] }}</span></td>
+                            <td class="text-right">{{ number_format((float) $result->self_score, 2) }}</td>
+                            <td class="text-right">{{ number_format((float) $result->others_score, 2) }}</td>
+                            <td class="text-right">{{ number_format((float) $result->gap_score, 2) }}</td>
+                            <td><span class="badge badge-{{ $result->gap_interpretation['theme'] }}">{{ $result->gap_interpretation['label'] }}</span></td>
                         </tr>
                     @empty
                         <tr>
@@ -122,8 +115,8 @@
 
 @section('js')
     <script>
-        const averageChartData = @json($averageChart);
-        const gapDistributionData = @json($gapDistributionChart);
+        const averageChartData = {{ Illuminate\Support\Js::from($averageChart) }};
+        const gapDistributionData = {{ Illuminate\Support\Js::from($gapDistributionChart) }};
 
         if (document.getElementById('averageGapChart')) {
             new Chart(document.getElementById('averageGapChart'), {
