@@ -21,6 +21,7 @@ class Employee extends Model
         'email',
         'supervisor_id',
         'employment_status',
+        'role_override',
         'hris_external_id',
         'sso_code_hash',
         'sso_code_generated_at',

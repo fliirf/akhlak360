@@ -19,6 +19,7 @@ use App\Http\Controllers\MasterData\DepartmentController;
 use App\Http\Controllers\MasterData\EmployeeController;
 use App\Http\Controllers\MasterData\Hris\HrisSyncController;
 use App\Http\Controllers\MasterData\PositionController;
+use App\Http\Controllers\MasterData\UserRoleController;
 use App\Http\Controllers\Notification\NotificationController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Reports\ReportController;
@@ -113,6 +114,9 @@ Route::middleware(['auth', 'active.employee', 'verified'])->group(function () {
     });
 
     Route::middleware('role:admin_hr')->prefix('master-data')->name('master-data.')->group(function () {
+        Route::get('/users', [UserRoleController::class, 'index'])->name('users.index');
+        Route::patch('/users/{employee}/role', [UserRoleController::class, 'update'])->name('users.role.update');
+        Route::delete('/users/{employee}/role', [UserRoleController::class, 'reset'])->name('users.role.reset');
         Route::post('/employees/{employee}/sso-code', [EmployeeController::class, 'generateSsoCode'])->name('employees.sso-code');
         Route::resource('departments', DepartmentController::class)->except('show');
         Route::resource('positions', PositionController::class)->except('show');
@@ -157,6 +161,7 @@ Route::middleware(['auth', 'active.employee', 'verified'])->group(function () {
         Route::get('/pending', [AssessmentFormController::class, 'pending'])->name('pending.index');
         Route::get('/fill', [AssessmentFormController::class, 'redirectToPending'])->name('fill.index');
         Route::get('/assignments/{assignment}/fill', [AssessmentFormController::class, 'show'])->name('fill.show');
+        Route::post('/assignments/{assignment}/draft', [AssessmentFormController::class, 'saveDraft'])->name('assignments.draft');
         Route::post('/assignments/{assignment}/submit', [AssessmentFormController::class, 'submit'])->name('submit');
         Route::get('/results', [AssessmentFormController::class, 'results'])->name('results.index');
     });

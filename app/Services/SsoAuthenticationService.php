@@ -15,6 +15,10 @@ use Throwable;
 
 class SsoAuthenticationService
 {
+    public function __construct(private readonly RoleResolutionService $roles)
+    {
+    }
+
     public function authenticate(string $identity, string $simulationCode, Request $request): User
     {
         $employee = Employee::query()
@@ -51,7 +55,7 @@ class SsoAuthenticationService
         try {
             return DB::transaction(function () use ($employee, $request): User {
                 $employee = Employee::query()->with('user')->lockForUpdate()->findOrFail($employee->id);
-                $role = $this->resolveRole($employee);
+                $role = $this->roles->resolveRole($employee);
                 $email = $this->resolvedEmail($employee);
                 $conflictingUser = User::query()
                     ->whereRaw('LOWER(email) = ?', [mb_strtolower($email)])
@@ -120,29 +124,6 @@ class SsoAuthenticationService
             'it_admin' => '/it/dashboard',
             default => '/employee/dashboard',
         };
-    }
-
-    private function resolveRole(Employee $employee): string
-    {
-        $employeeNumber = mb_strtoupper(trim($employee->employee_number));
-        $mapping = config('akhlak360.role_mapping', []);
-
-        foreach ([
-            'admin_hr_employee_numbers' => 'admin_hr',
-            'management_employee_numbers' => 'management',
-            'it_admin_employee_numbers' => 'it_admin',
-        ] as $configKey => $role) {
-            $numbers = array_map(
-                fn ($number) => mb_strtoupper(trim((string) $number)),
-                $mapping[$configKey] ?? []
-            );
-
-            if (in_array($employeeNumber, $numbers, true)) {
-                return $role;
-            }
-        }
-
-        return $employee->subordinates()->exists() ? 'supervisor' : 'employee';
     }
 
     private function resolvedEmail(Employee $employee): string

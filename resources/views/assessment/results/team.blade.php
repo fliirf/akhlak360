@@ -28,6 +28,17 @@
         Results are grouped by assessor type across {{ $teamCount }} direct reports. No individual peer or subordinate score and no assessor identity is shown.
     </div>
 
+    @if ($subordinateFeedback->isNotEmpty())
+        <x-adminlte-card title="Feedback dari Tim/Bawahan" theme="info" icon="fas fa-comment-alt">
+            <p class="text-muted">Feedback ditampilkan secara anonim untuk menjaga kerahasiaan pemberi masukan.</p>
+            @foreach ($subordinateFeedback as $feedback)
+                <div class="callout callout-info">
+                    <p class="mb-0" style="white-space: pre-line">{{ $feedback }}</p>
+                </div>
+            @endforeach
+        </x-adminlte-card>
+    @endif
+
     <x-adminlte-card title="Aggregated Scores by Assessor Type" theme="success" icon="fas fa-users">
         <div class="table-responsive">
             <table class="table table-striped mb-0">

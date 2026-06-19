@@ -19,6 +19,7 @@ class AssessmentAssignment extends Model
         'assessor_type',
         'status',
         'submitted_at',
+        'feedback',
     ];
 
     protected function casts(): array

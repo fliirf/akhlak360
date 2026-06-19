@@ -29,6 +29,16 @@
         <div class="alert alert-info">Belum ada periode penilaian yang tersedia.</div>
     @endif
 
+    @if ($supervisorFeedback->isNotEmpty())
+        <x-adminlte-card title="Feedback dari Atasan" theme="info" icon="fas fa-comment-alt">
+            @foreach ($supervisorFeedback as $feedback)
+                <div class="callout callout-info">
+                    <p class="mb-0" style="white-space: pre-line">{{ $feedback }}</p>
+                </div>
+            @endforeach
+        </x-adminlte-card>
+    @endif
+
     @forelse ($results as $result)
         @php($idp = $result->employee?->idpRecommendations->first())
         <x-adminlte-card title="{{ $result->employee?->name ?? 'Pegawai' }} - {{ $result->assessmentPeriod?->name }}" theme="success" icon="fas fa-chart-bar">

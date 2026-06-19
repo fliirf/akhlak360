@@ -21,6 +21,7 @@ class AdminlteMenuTest extends TestCase
             ->assertOk()
             ->assertSee('Master Data')
             ->assertSee('Departments')
+            ->assertSee('User &amp; Role', false)
             ->assertSee('Assessment Cycle')
             ->assertSee('Assign Assessors')
             ->assertSee('Core Value Dashboard')

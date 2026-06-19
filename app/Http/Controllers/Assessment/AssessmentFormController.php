@@ -16,6 +16,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class AssessmentFormController extends Controller
@@ -96,12 +97,24 @@ class AssessmentFormController extends Controller
                     ->groupBy('assessment_assignments.assessor_type')
                     ->get()
                 : collect();
+            $subordinateFeedback = $selectedPeriod
+                ? AssessmentAssignment::query()
+                    ->where('assessment_period_id', $selectedPeriod)
+                    ->where('assessee_employee_id', $employee->id)
+                    ->where('assessor_type', 'subordinate')
+                    ->submitted()
+                    ->whereNotNull('feedback')
+                    ->where('feedback', '<>', '')
+                    ->latest('submitted_at')
+                    ->pluck('feedback')
+                : collect();
 
             return view('assessment.results.team', [
                 'periods' => $periods,
                 'selectedPeriod' => $selectedPeriod,
                 'teamCount' => $teamIds->count(),
                 'aggregates' => $aggregates,
+                'subordinateFeedback' => $subordinateFeedback,
             ]);
         }
 
@@ -115,12 +128,24 @@ class AssessmentFormController extends Controller
             ->select('assessment_results.*')
             ->paginate(15)
             ->withQueryString();
+        $supervisorFeedback = $selectedPeriod
+            ? AssessmentAssignment::query()
+                ->where('assessment_period_id', $selectedPeriod)
+                ->where('assessee_employee_id', $employee->id)
+                ->where('assessor_type', 'supervisor')
+                ->submitted()
+                ->whereNotNull('feedback')
+                ->where('feedback', '<>', '')
+                ->latest('submitted_at')
+                ->pluck('feedback')
+            : collect();
 
         return view('assessment.results.index', [
             'periods' => $periods,
             'selectedPeriod' => $selectedPeriod,
             'results' => $results,
             'isSupervisor' => false,
+            'supervisorFeedback' => $supervisorFeedback,
         ]);
     }
 
@@ -141,18 +166,102 @@ class AssessmentFormController extends Controller
                 ->with('warning', 'This assessment is not available because its period is not currently open.');
         }
 
+        $responses = $assignment->responses()
+            ->get()
+            ->keyBy(fn (AssessmentResponse $response) => $response->core_value."\0".$response->indicator);
+        $draftScores = [];
+
+        foreach (self::INDICATORS as $coreValue => $indicators) {
+            foreach ($indicators as $index => $indicator) {
+                $response = $responses->get($coreValue."\0".$indicator);
+
+                if ($response) {
+                    $draftScores[$coreValue][$index] = $response->score;
+                }
+            }
+        }
+
         return view('assessment.forms.show', [
             'assignment' => $assignment,
             'indicators' => self::INDICATORS,
             'scale' => $this->scale(),
+            'draftScores' => $draftScores,
+            'hasDraft' => $responses->isNotEmpty() || filled($assignment->feedback),
         ]);
+    }
+
+    public function saveDraft(Request $request, AssessmentAssignment $assignment): RedirectResponse
+    {
+        $this->authorizeAssignment($request, $assignment);
+
+        if ($assignment->status !== 'pending') {
+            return redirect()
+                ->route('assessment.pending.index')
+                ->with('warning', 'This assessment has already been submitted and cannot be changed.');
+        }
+
+        $assignment->loadMissing('assessmentPeriod');
+        if (! $assignment->assessmentPeriod->isOpen()) {
+            return redirect()
+                ->route('assessment.pending.index')
+                ->with('warning', 'This assessment draft cannot be saved because its period is not currently open.');
+        }
+
+        $this->ensureOnlyKnownIndicatorsWereSubmitted($request);
+        $validated = $request->validate($this->assessmentRules($assignment, false));
+
+        $saved = DB::transaction(function () use ($request, $assignment, $validated): bool {
+            $lockedAssignment = AssessmentAssignment::query()
+                ->with('assessmentPeriod')
+                ->lockForUpdate()
+                ->findOrFail($assignment->id);
+
+            if ($lockedAssignment->status !== 'pending' || ! $lockedAssignment->assessmentPeriod->isOpen()) {
+                return false;
+            }
+
+            $this->persistResponses($lockedAssignment, $validated['scores'] ?? []);
+            $this->persistFeedback($lockedAssignment, $validated);
+
+            AuditLog::create([
+                'user_id' => $request->user()?->id,
+                'action' => 'assessment_draft_saved',
+                'module' => 'assessment_forms',
+                'description' => "Saved draft for assessment assignment #{$lockedAssignment->id}.",
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            if ($this->supportsFeedback($lockedAssignment)) {
+                AuditLog::create([
+                    'user_id' => $request->user()?->id,
+                    'action' => 'assessment_feedback_draft_saved',
+                    'module' => 'assessment_forms',
+                    'description' => "Saved feedback draft for assessment assignment #{$lockedAssignment->id}.",
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                ]);
+            }
+
+            return true;
+        });
+
+        if (! $saved) {
+            return redirect()
+                ->route('assessment.pending.index')
+                ->with('warning', 'This assessment is no longer available or has already been submitted.');
+        }
+
+        return redirect()
+            ->route('assessment.fill.show', $assignment)
+            ->with('success', 'Draft assessment berhasil disimpan.');
     }
 
     public function submit(Request $request, AssessmentAssignment $assignment, AssessmentResultService $resultService): RedirectResponse
     {
         $this->authorizeAssignment($request, $assignment);
 
-        if ($assignment->status !== 'pending' || $assignment->responses()->exists()) {
+        if ($assignment->status !== 'pending') {
             return redirect()
                 ->route('assessment.pending.index')
                 ->with('warning', 'Duplicate submission prevented. This assessment has already been submitted.');
@@ -165,7 +274,8 @@ class AssessmentFormController extends Controller
                 ->with('warning', 'This assessment cannot be submitted because its period is not currently open.');
         }
 
-        $validated = $request->validate($this->responseRules());
+        $this->ensureOnlyKnownIndicatorsWereSubmitted($request);
+        $validated = $request->validate($this->assessmentRules($assignment));
 
         $submitted = DB::transaction(function () use ($request, $assignment, $validated, $resultService): bool {
             $lockedAssignment = AssessmentAssignment::query()
@@ -175,22 +285,13 @@ class AssessmentFormController extends Controller
 
             if (
                 $lockedAssignment->status !== 'pending'
-                || $lockedAssignment->responses()->exists()
                 || ! $lockedAssignment->assessmentPeriod->isOpen()
             ) {
                 return false;
             }
 
-            foreach (self::INDICATORS as $coreValue => $indicators) {
-                foreach ($indicators as $index => $indicator) {
-                    AssessmentResponse::create([
-                        'assessment_assignment_id' => $lockedAssignment->id,
-                        'core_value' => $coreValue,
-                        'indicator' => $indicator,
-                        'score' => $validated['scores'][$coreValue][$index],
-                    ]);
-                }
-            }
+            $this->persistResponses($lockedAssignment, $validated['scores']);
+            $this->persistFeedback($lockedAssignment, $validated);
 
             $lockedAssignment->update([
                 'status' => 'submitted',
@@ -218,6 +319,17 @@ class AssessmentFormController extends Controller
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent(),
             ]);
+
+            if ($this->supportsFeedback($lockedAssignment)) {
+                AuditLog::create([
+                    'user_id' => $request->user()?->id,
+                    'action' => 'assessment_feedback_submitted',
+                    'module' => 'assessment_forms',
+                    'description' => "Submitted feedback for assessment assignment #{$lockedAssignment->id}.",
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                ]);
+            }
 
             $resultService->calculateForEmployeePeriod(
                 $lockedAssignment->assessee_employee_id,
@@ -255,17 +367,96 @@ class AssessmentFormController extends Controller
         abort_unless((int) $assignment->assessor_employee_id === (int) $employee->id, 403);
     }
 
-    private function responseRules(): array
+    private function responseRules(bool $requireComplete = true): array
     {
-        $rules = [];
+        $rules = [
+            'scores' => [$requireComplete ? 'required' : 'sometimes', 'array'],
+        ];
 
         foreach (self::INDICATORS as $coreValue => $indicators) {
+            $rules["scores.{$coreValue}"] = [$requireComplete ? 'required' : 'sometimes', 'array'];
+
             foreach (array_keys($indicators) as $index) {
-                $rules["scores.{$coreValue}.{$index}"] = ['required', 'integer', Rule::in([1, 2, 3, 4, 5])];
+                $rules["scores.{$coreValue}.{$index}"] = [
+                    $requireComplete ? 'required' : 'sometimes',
+                    'integer',
+                    Rule::in([1, 2, 3, 4, 5]),
+                ];
             }
         }
 
         return $rules;
+    }
+
+    private function assessmentRules(AssessmentAssignment $assignment, bool $requireComplete = true): array
+    {
+        $rules = $this->responseRules($requireComplete);
+
+        if ($this->supportsFeedback($assignment)) {
+            $rules['feedback'] = ['nullable', 'string', 'max:2000'];
+        }
+
+        return $rules;
+    }
+
+    private function ensureOnlyKnownIndicatorsWereSubmitted(Request $request): void
+    {
+        $submittedScores = $request->input('scores', []);
+
+        if (! is_array($submittedScores)) {
+            return;
+        }
+
+        foreach ($submittedScores as $coreValue => $scores) {
+            if (! array_key_exists($coreValue, self::INDICATORS) || ! is_array($scores)) {
+                throw ValidationException::withMessages([
+                    'scores' => 'The submitted assessment contains an unknown indicator.',
+                ]);
+            }
+
+            foreach (array_keys($scores) as $index) {
+                if (
+                    (! is_int($index) && ! ctype_digit((string) $index))
+                    || ! array_key_exists((int) $index, self::INDICATORS[$coreValue])
+                ) {
+                    throw ValidationException::withMessages([
+                        'scores' => 'The submitted assessment contains an unknown indicator.',
+                    ]);
+                }
+            }
+        }
+    }
+
+    private function persistResponses(AssessmentAssignment $assignment, array $scores): void
+    {
+        foreach ($scores as $coreValue => $coreValueScores) {
+            foreach ($coreValueScores as $index => $score) {
+                AssessmentResponse::updateOrCreate(
+                    [
+                        'assessment_assignment_id' => $assignment->id,
+                        'core_value' => $coreValue,
+                        'indicator' => self::INDICATORS[$coreValue][(int) $index],
+                    ],
+                    ['score' => $score],
+                );
+            }
+        }
+    }
+
+    private function persistFeedback(AssessmentAssignment $assignment, array $validated): void
+    {
+        if (! $this->supportsFeedback($assignment)) {
+            return;
+        }
+
+        $assignment->update([
+            'feedback' => $validated['feedback'] ?? null,
+        ]);
+    }
+
+    private function supportsFeedback(AssessmentAssignment $assignment): bool
+    {
+        return in_array($assignment->assessor_type, ['supervisor', 'subordinate'], true);
     }
 
     private function scale(): array

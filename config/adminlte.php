@@ -378,6 +378,12 @@ return [
                     'can' => 'view-master-data',
                 ],
                 [
+                    'text' => 'User & Role',
+                    'route' => 'master-data.users.index',
+                    'icon' => 'fas fa-fw fa-user-shield',
+                    'can' => 'view-master-data',
+                ],
+                [
                     'text' => 'HRIS Sync',
                     'route' => 'master-data.hris-sync.index',
                     'icon' => 'fas fa-fw fa-sync-alt',
